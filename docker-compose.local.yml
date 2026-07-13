@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: agrodesk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agrodesk_ti
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - agrodesk_pgdata:/var/lib/postgresql/data
+
+volumes:
+  agrodesk_pgdata:

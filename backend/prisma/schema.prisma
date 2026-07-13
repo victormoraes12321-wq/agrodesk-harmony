@@ -1,0 +1,465 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String                @id @default(cuid())
+  name                String                @unique
+  email               String                @unique
+  passwordHash        String
+  role                UserRole              @default(SOLICITANTE)
+  phone               String
+  position            String
+  departmentId        String?
+  branchId            String?
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  extension           String?
+  notes               String?
+  whatsapp            String?
+  mustChangePassword  Boolean               @default(true)
+  canReceiveTickets   Boolean               @default(false)
+  assets              Asset[]               @relation("AssetResponsible")
+  movementsFrom       AssetMovement[]       @relation("AssetMovementFrom")
+  movementsRegistered AssetMovement[]       @relation("AssetMovementRegisteredBy")
+  movementsTo         AssetMovement[]       @relation("AssetMovementTo")
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  refreshTokens       RefreshToken[]
+  assignedTickets     Ticket[]              @relation("TicketAssignee")
+  requestedTickets    Ticket[]              @relation("TicketRequester")
+  attachments         TicketAttachment[]
+  comments            TicketComment[]
+  ratings             TicketRating[]
+  statusChanges       TicketStatusHistory[] @relation("StatusChangedBy")
+  branch              Branch?               @relation(fields: [branchId], references: [id])
+  department          Department?           @relation(fields: [departmentId], references: [id])
+
+  @@index([role, isActive])
+  @@index([canReceiveTickets, isActive])
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model Department {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  assets        Asset[]
+  movementsFrom AssetMovement[] @relation("MovementFromDepartment")
+  movementsTo   AssetMovement[] @relation("MovementToDepartment")
+  tickets       Ticket[]
+  users         User[]
+
+  @@index([isActive])
+}
+
+model Branch {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  address       String
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  assets        Asset[]
+  movementsFrom AssetMovement[] @relation("MovementFromBranch")
+  movementsTo   AssetMovement[] @relation("MovementToBranch")
+  tickets       Ticket[]
+  users         User[]
+
+  @@index([isActive])
+}
+
+model Category {
+  id              String         @id @default(cuid())
+  name            String         @unique
+  description     String?
+  defaultPriority TicketPriority @default(MEDIUM)
+  defaultSlaHours Int            @default(24)
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  subcategories   Subcategory[]
+  tickets         Ticket[]
+
+  @@index([isActive])
+}
+
+model Subcategory {
+  id              String          @id @default(cuid())
+  categoryId      String
+  name            String
+  description     String?
+  defaultPriority TicketPriority?
+  defaultSlaHours Int?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  category        Category        @relation(fields: [categoryId], references: [id])
+  tickets         Ticket[]
+
+  @@unique([categoryId, name])
+  @@index([categoryId, isActive])
+}
+
+model Ticket {
+  id                      String                @id @default(cuid())
+  protocolNumber          String                @unique
+  title                   String?
+  description             String
+  status                  TicketStatus          @default(OPEN)
+  suggestedPriority       TicketPriority?
+  realPriority            TicketPriority        @default(MEDIUM)
+  requesterId             String
+  requesterName           String
+  requesterPhone          String
+  requesterEmail          String?
+  assignedToId            String?
+  departmentId            String
+  branchId                String
+  categoryId              String?
+  subcategoryId           String?
+  equipmentName           String?
+  assetTag                String?
+  preferredServiceTime    String?
+  impactDescription       String?
+  additionalNotes         String?
+  internalNotes           String?
+  diagnosis               String?
+  solution                String?
+  rootCause               String?
+  usedParts               String?
+  timeSpentMinutes        Int?
+  slaDueAt                DateTime?
+  firstResponseAt         DateTime?
+  resolvedAt              DateTime?
+  closedAt                DateTime?
+  canceledAt              DateTime?
+  reopenedAt              DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  waitingRequesterMessage String?
+  assetId                 String?
+  notifications           Notification[]
+  asset                   Asset?                @relation(fields: [assetId], references: [id])
+  assignedTo              User?                 @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  branch                  Branch                @relation(fields: [branchId], references: [id])
+  category                Category?             @relation(fields: [categoryId], references: [id])
+  department              Department            @relation(fields: [departmentId], references: [id])
+  requester               User                  @relation("TicketRequester", fields: [requesterId], references: [id])
+  subcategory             Subcategory?          @relation(fields: [subcategoryId], references: [id])
+  attachments             TicketAttachment[]
+  comments                TicketComment[]
+  rating                  TicketRating?
+  statusHistory           TicketStatusHistory[]
+
+  @@index([status])
+  @@index([realPriority])
+  @@index([requesterId, createdAt])
+  @@index([assignedToId, status])
+  @@index([departmentId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([categoryId, createdAt])
+  @@index([assetId, createdAt])
+  @@index([slaDueAt])
+  @@index([status, slaDueAt])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  userId     String
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@index([userId, createdAt])
+  @@index([isInternal])
+}
+
+model TicketAttachment {
+  id           String   @id @default(cuid())
+  ticketId     String
+  uploadedById String
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  createdAt    DateTime @default(now())
+  isInternal   Boolean  @default(false)
+  ticket       Ticket   @relation(fields: [ticketId], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@index([ticketId, isInternal, createdAt])
+  @@index([uploadedById, createdAt])
+}
+
+model TicketStatusHistory {
+  id          String        @id @default(cuid())
+  ticketId    String
+  changedById String
+  fromStatus  TicketStatus?
+  toStatus    TicketStatus
+  note        String?
+  createdAt   DateTime      @default(now())
+  changedBy   User          @relation("StatusChangedBy", fields: [changedById], references: [id])
+  ticket      Ticket        @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@index([changedById, createdAt])
+  @@index([toStatus, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  ticketId  String?
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  ticket    Ticket?          @relation(fields: [ticketId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([ticketId])
+  @@index([type, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([entity, entityId, createdAt])
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+}
+
+model TicketRating {
+  id        String   @id @default(cuid())
+  ticketId  String   @unique
+  userId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([rating, createdAt])
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  cnpj      String?  @unique
+  contact   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assets    Asset[]
+
+  @@index([isActive])
+}
+
+model AssetType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assets      Asset[]
+
+  @@index([isActive])
+}
+
+model Asset {
+  id              String             @id @default(cuid())
+  code            String             @unique
+  name            String
+  description     String?
+  serialNumber    String?
+  acquisitionDate DateTime?
+  value           Decimal?           @db.Decimal(10, 2)
+  status          AssetStatus        @default(EM_USO)
+  supplierId      String?
+  assetTypeId     String
+  departmentId    String?
+  branchId        String?
+  userId          String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  hostname        String?
+  parentId        String?
+  assetType       AssetType          @relation(fields: [assetTypeId], references: [id])
+  branch          Branch?            @relation(fields: [branchId], references: [id])
+  department      Department?        @relation(fields: [departmentId], references: [id])
+  parent          Asset?             @relation("AssetComponents", fields: [parentId], references: [id])
+  components      Asset[]            @relation("AssetComponents")
+  supplier        Supplier?          @relation(fields: [supplierId], references: [id])
+  user            User?              @relation("AssetResponsible", fields: [userId], references: [id])
+  maintenances    AssetMaintenance[]
+  movements       AssetMovement[]
+  tickets         Ticket[]
+
+  @@index([status])
+  @@index([assetTypeId])
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+model AssetMovement {
+  id               String            @id @default(cuid())
+  assetId          String
+  type             AssetMovementType
+  fromDepartmentId String?
+  toDepartmentId   String?
+  fromBranchId     String?
+  toBranchId       String?
+  fromUserId       String?
+  toUserId         String?
+  date             DateTime          @default(now())
+  reason           String?
+  registeredById   String
+  createdAt        DateTime          @default(now())
+  asset            Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromBranch       Branch?           @relation("MovementFromBranch", fields: [fromBranchId], references: [id])
+  fromDepartment   Department?       @relation("MovementFromDepartment", fields: [fromDepartmentId], references: [id])
+  fromUser         User?             @relation("AssetMovementFrom", fields: [fromUserId], references: [id])
+  registeredBy     User              @relation("AssetMovementRegisteredBy", fields: [registeredById], references: [id])
+  toBranch         Branch?           @relation("MovementToBranch", fields: [toBranchId], references: [id])
+  toDepartment     Department?       @relation("MovementToDepartment", fields: [toDepartmentId], references: [id])
+  toUser           User?             @relation("AssetMovementTo", fields: [toUserId], references: [id])
+
+  @@index([assetId, date])
+  @@index([type])
+}
+
+model AssetMaintenance {
+  id                  String               @id @default(cuid())
+  assetId             String
+  type                AssetMaintenanceType
+  date                DateTime             @default(now())
+  cost                Decimal?             @db.Decimal(10, 2)
+  provider            String?
+  description         String
+  nextMaintenanceDate DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  asset               Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, date])
+  @@index([type])
+}
+
+enum UserRole {
+  SOLICITANTE
+  TI_ADMIN
+}
+
+enum TicketStatus {
+  OPEN
+  ANALYSIS
+  IN_PROGRESS
+  WAITING_USER
+  WAITING_PARTS_OR_THIRD_PARTY
+  RESOLVED
+  CLOSED
+  CANCELED
+  REOPENED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  SLA_WARNING
+  SLA_EXPIRED
+  TICKET_RESOLVED
+  TICKET_REOPENED
+}
+
+enum AssetStatus {
+  EM_USO
+  ESTOQUE
+  MANUTENCAO
+  BAIXADO
+}
+
+enum AssetMovementType {
+  TRANSFERENCIA
+  EMPRESTIMO
+  DEVOLUCAO
+}
+
+enum AssetMaintenanceType {
+  PREVENTIVA
+  CORRETIVA
+}
