@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -78,5 +78,12 @@ export class UsersController {
   @ApiOperation({ summary: "Alterar minha senha" })
   changeMyPassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
     return this.usersService.changePassword(user.sub, dto);
+  }
+
+  @Delete(":id")
+  @Roles(UserRole.TI_ADMIN)
+  @ApiOperation({ summary: "Excluir/Mover para lixeira (TI_ADMIN)" })
+  remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.usersService.remove(user, id);
   }
 }

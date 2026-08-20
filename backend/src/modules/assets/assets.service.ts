@@ -50,7 +50,7 @@ export class AssetsService {
   }
 
   findAll(filters?: any) {
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (filters) {
       if (filters.status) where.status = filters.status;
       if (filters.assetTypeId) where.assetTypeId = filters.assetTypeId;
@@ -120,7 +120,7 @@ export class AssetsService {
     if (Object.keys(parentLocationFields).length > 0) {
       await this.prisma.asset.updateMany({
         where: { parentId: id },
-        data: parentLocationFields
+        data: parentLocationFields,
       });
     }
 
@@ -138,10 +138,9 @@ export class AssetsService {
 
   async remove(id: string, userId: string) {
     const oldAsset = await this.findOne(id);
-    // Realizar exclusão lógica mudando o status para BAIXADO ou deletar mesmo
     const deletedAsset = await this.prisma.asset.update({
       where: { id },
-      data: { status: 'BAIXADO' }
+      data: { status: 'BAIXADO', deletedAt: new Date() }
     });
 
     await this.auditLogsService.createLog({
@@ -156,12 +155,13 @@ export class AssetsService {
   }
   
   async getDashboardStats() {
-    const total = await this.prisma.asset.count();
-    const inUse = await this.prisma.asset.count({ where: { status: 'EM_USO' } });
-    const inMaintenance = await this.prisma.asset.count({ where: { status: 'MANUTENCAO' } });
-    const inStock = await this.prisma.asset.count({ where: { status: 'ESTOQUE' } });
+    const total = await this.prisma.asset.count({ where: { deletedAt: null } });
+    const inUse = await this.prisma.asset.count({ where: { status: 'EM_USO', deletedAt: null } });
+    const inMaintenance = await this.prisma.asset.count({ where: { status: 'MANUTENCAO', deletedAt: null } });
+    const inStock = await this.prisma.asset.count({ where: { status: 'ESTOQUE', deletedAt: null } });
     
     const valueAggregation = await this.prisma.asset.aggregate({
+      where: { deletedAt: null },
       _sum: {
         value: true
       }
@@ -169,6 +169,7 @@ export class AssetsService {
     
     const byType = await this.prisma.asset.groupBy({
       by: ['assetTypeId'],
+      where: { deletedAt: null },
       _count: {
         id: true,
       },

@@ -23,6 +23,7 @@ import { Route as AppPerfilRouteImport } from './routes/app.perfil'
 import { Route as AppPatrimonioRouteImport } from './routes/app.patrimonio'
 import { Route as AppNovaOsRouteImport } from './routes/app.nova-os'
 import { Route as AppMeusChamadosRouteImport } from './routes/app.meus-chamados'
+import { Route as AppLixeiraRouteImport } from './routes/app.lixeira'
 import { Route as AppKanbanRouteImport } from './routes/app.kanban'
 import { Route as AppFiliaisRouteImport } from './routes/app.filiais'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
@@ -107,6 +108,11 @@ const AppNovaOsRoute = AppNovaOsRouteImport.update({
 const AppMeusChamadosRoute = AppMeusChamadosRouteImport.update({
   id: '/meus-chamados',
   path: '/meus-chamados',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLixeiraRoute = AppLixeiraRouteImport.update({
+  id: '/lixeira',
+  path: '/lixeira',
   getParentRoute: () => AppRoute,
 } as any)
 const AppKanbanRoute = AppKanbanRouteImport.update({
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/filiais': typeof AppFiliaisRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/lixeira': typeof AppLixeiraRoute
   '/app/meus-chamados': typeof AppMeusChamadosRoute
   '/app/nova-os': typeof AppNovaOsRoute
   '/app/patrimonio': typeof AppPatrimonioRouteWithChildren
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/filiais': typeof AppFiliaisRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/lixeira': typeof AppLixeiraRoute
   '/app/meus-chamados': typeof AppMeusChamadosRoute
   '/app/nova-os': typeof AppNovaOsRoute
   '/app/patrimonio': typeof AppPatrimonioRouteWithChildren
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/filiais': typeof AppFiliaisRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/lixeira': typeof AppLixeiraRoute
   '/app/meus-chamados': typeof AppMeusChamadosRoute
   '/app/nova-os': typeof AppNovaOsRoute
   '/app/patrimonio': typeof AppPatrimonioRouteWithChildren
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/filiais'
     | '/app/kanban'
+    | '/app/lixeira'
     | '/app/meus-chamados'
     | '/app/nova-os'
     | '/app/patrimonio'
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/filiais'
     | '/app/kanban'
+    | '/app/lixeira'
     | '/app/meus-chamados'
     | '/app/nova-os'
     | '/app/patrimonio'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/filiais'
     | '/app/kanban'
+    | '/app/lixeira'
     | '/app/meus-chamados'
     | '/app/nova-os'
     | '/app/patrimonio'
@@ -481,6 +493,13 @@ declare module '@tanstack/react-router' {
       path: '/meus-chamados'
       fullPath: '/app/meus-chamados'
       preLoaderRoute: typeof AppMeusChamadosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/lixeira': {
+      id: '/app/lixeira'
+      path: '/lixeira'
+      fullPath: '/app/lixeira'
+      preLoaderRoute: typeof AppLixeiraRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/kanban': {
@@ -635,6 +654,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppFiliaisRoute: typeof AppFiliaisRoute
   AppKanbanRoute: typeof AppKanbanRoute
+  AppLixeiraRoute: typeof AppLixeiraRoute
   AppMeusChamadosRoute: typeof AppMeusChamadosRoute
   AppNovaOsRoute: typeof AppNovaOsRoute
   AppPatrimonioRoute: typeof AppPatrimonioRouteWithChildren
@@ -655,6 +675,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppFiliaisRoute: AppFiliaisRoute,
   AppKanbanRoute: AppKanbanRoute,
+  AppLixeiraRoute: AppLixeiraRoute,
   AppMeusChamadosRoute: AppMeusChamadosRoute,
   AppNovaOsRoute: AppNovaOsRoute,
   AppPatrimonioRoute: AppPatrimonioRouteWithChildren,

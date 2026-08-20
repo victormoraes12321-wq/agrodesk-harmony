@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowLeft,
@@ -29,7 +29,9 @@ import {
   PenTool,
   Phone,
   Plus,
+  PlusCircle,
   RefreshCw,
+  RotateCcw,
   Send,
   Shield,
   ShieldAlert,
@@ -82,7 +84,9 @@ import { WhatsAppMessagePanel } from "@/components/tickets/WhatsAppMessagePanel"
 import { TicketSlaChip } from "@/features/tickets/TicketSlaChip";
 import { TechnicalChecklist } from "@/components/tickets/TechnicalChecklist";
 import { TicketSlaTimeline } from "@/components/tickets/TicketSlaTimeline";
+import { TicketTimelineStepper } from "@/components/tickets/TicketTimelineStepper";
 import { DigitalSignatureModal } from "@/components/tickets/DigitalSignatureModal";
+import { soundEffects } from "@/lib/sound";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { formatDateTime, priorityLabel, statusLabel } from "@/lib/format";
 import {
@@ -190,7 +194,8 @@ function TicketDetailRoute() {
 // Visão do Solicitante
 // ─────────────────────────────────────────────────────────────────────────────
 function RequesterTicketView({ ticket }: { ticket: Ticket }) {
-  const { departments, branches, categories, users, addComment, rateTicket, uploadAttachment } = useApp();
+  const { departments, branches, categories, users, addComment, rateTicket, uploadAttachment, updateTicket } = useApp();
+  const navigate = useNavigate();
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(ticket.rating ?? 0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -200,12 +205,21 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [isReopening, setIsReopening] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const publicComments = ticket.comments.filter((entry) => !entry.internal);
   const isConcluded = ticket.status === "RESOLVIDO" || ticket.status === "FINALIZADO";
   const canRate = isConcluded;
   const isRated = Boolean(ticket.rating && ticket.rating > 0);
+
+  const resolvedRefDate = ticket.closedAt || ticket.resolvedAt || ticket.updatedAt;
+  const hoursSinceResolution = resolvedRefDate
+    ? (Date.now() - new Date(resolvedRefDate).getTime()) / 3600000
+    : 0;
+  const canReopenDirectly = isConcluded && hoursSinceResolution <= 48;
 
   const assigneeName = getUserName(users, ticket.assigneeId);
 
@@ -291,11 +305,31 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
 
       await rateTicket(ticket.id, validation.data.rating, finalComment);
       setIsRatingModalOpen(false);
+      soundEffects.celebrate();
       toast.success("🎉 Avaliação registrada com sucesso! Muito obrigado pelo seu feedback.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Não foi possível registrar avaliação.";
       toast.error(message);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!reopenReason.trim()) {
+      toast.error("Por favor, descreva o motivo da reabertura.");
+      return;
+    }
+    setIsReopening(true);
+    try {
+      await updateTicket(ticket.id, { status: "REABERTO", internalNotes: reopenReason.trim() });
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      toast.success("Ordem de Serviço reaberta com sucesso!");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reabrir a OS.";
+      toast.error(message);
+    } finally {
+      setIsReopening(false);
     }
   };
 
@@ -416,8 +450,51 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
               </div>
             </div>
           )}
+
+          {/* Ação de Reabertura ou Nova OS */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-emerald-500/20">
+            <div className="text-xs text-muted-foreground">
+              {canReopenDirectly ? (
+                <span>O problema voltou? Você pode reabrir esta OS em até 48 horas após a conclusão.</span>
+              ) : (
+                <span>O prazo de 48h para reabertura direta expirou. Caso precise, abra uma nova OS com referência a este chamado.</span>
+              )}
+            </div>
+
+            {canReopenDirectly ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsReopenModalOpen(true)}
+                className="text-xs h-8 text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+              >
+                <RotateCcw className="size-3.5" /> Reabrir Chamado
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  navigate({
+                    to: "/app/nova-os",
+                    search: {
+                      ref: ticket.protocol,
+                    } as any,
+                  })
+                }
+                className="text-xs h-8 text-primary border-primary/30 hover:bg-primary/10 gap-1.5"
+              >
+                <PlusCircle className="size-3.5" /> Abrir Nova OS com Referência
+              </Button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Linha do Tempo Visual */}
+      <TicketTimelineStepper ticket={ticket} />
 
       {/* Hero Card */}
       <Card className="border shadow-[var(--shadow-card)] overflow-hidden bg-card">
@@ -794,6 +871,45 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
             >
               <CheckCircle2 className="size-4" /> Enviar Avaliação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Reabertura da OS (Janela de 48h) */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <RotateCcw className="size-5" /> Reabrir Ordem de Serviço
+            </DialogTitle>
+            <DialogDescription>
+              Por favor, informe detalhadamente o que voltou a acontecer ou por que a solicitação precisa ser reaberta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Motivo da Reabertura *</Label>
+              <Textarea
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder="Ex: O problema voltou a ocorrer logo após a finalização..."
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReopenModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleReopen()}
+              disabled={isReopening || !reopenReason.trim()}
+            >
+              {isReopening ? "Reabrindo..." : "Confirmar Reabertura"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1627,6 +1743,9 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
       {/* ───────────────────────────────────────────────────────────────────── */}
       {/* CORPO VERTICAL DE SEÇÕES ESTRUTURADAS                                 */}
       {/* ───────────────────────────────────────────────────────────────────── */}
+
+      {/* Linha do Tempo Visual da OS */}
+      <TicketTimelineStepper ticket={ticket} />
 
       {/* Alerta de Mensagem Aguardada */}
       {ticket.status === "AGUARDANDO_USUARIO" && ticket.waitingRequesterMessage && (

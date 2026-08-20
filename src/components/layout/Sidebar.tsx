@@ -16,6 +16,7 @@ import {
   UserCircle2,
   Users2,
   Package,
+  Trash2,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -61,6 +62,7 @@ const adminGroups: Array<{ title: string; items: Item[] }> = [
   {
     title: "Sistema",
     items: [
+      { to: "/app/lixeira", label: "Lixeira / Recuperação", icon: Trash2 },
       { to: "/app/auditoria", label: "Auditoria", icon: ShieldCheck },
       { to: "/app/configuracoes", label: "Configuracoes", icon: Settings },
       { to: "/app/perfil", label: "Meu Perfil", icon: UserCircle2 },

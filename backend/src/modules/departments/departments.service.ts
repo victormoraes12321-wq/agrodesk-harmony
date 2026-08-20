@@ -34,7 +34,10 @@ export class DepartmentsService {
     const cached = this.cache.get(this.cacheKey);
     if (cached) return cached;
 
-    const data = await this.prisma.department.findMany({ orderBy: { name: "asc" } });
+    const data = await this.prisma.department.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+    });
     this.cache.set(this.cacheKey, data);
     return data;
   }
@@ -69,16 +72,19 @@ export class DepartmentsService {
 
   async remove(actor: AuthUser, id: string) {
     await this.findById(id);
-    await this.prisma.department.delete({ where: { id } });
+    await this.prisma.department.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
     this.cache.clear();
     await this.prisma.auditLog.create({
       data: {
         userId: actor.sub,
         entity: "Department",
         entityId: id,
-        action: "DEPARTMENT_DELETE",
+        action: "DEPARTMENT_SOFT_DELETE",
       },
     });
-    return { success: true };
+    return { success: true, message: "Setor movido para a lixeira" };
   }
 }

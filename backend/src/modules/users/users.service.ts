@@ -156,6 +156,7 @@ export class UsersService {
 
   async findAll() {
     return this.prisma.user.findMany({
+      where: { deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -177,6 +178,19 @@ export class UsersService {
       },
       orderBy: { name: "asc" },
     });
+  }
+
+  async remove(actor: AuthUser, id: string) {
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("Usuario nao encontrado");
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+
+    await this.logAudit(actor, "USER_SOFT_DELETE", id, { deletedAt: new Date() });
+    return { success: true, message: "Usuario movido para a lixeira" };
   }
 
   async findById(id: string) {

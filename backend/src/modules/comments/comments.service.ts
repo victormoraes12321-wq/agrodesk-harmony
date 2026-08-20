@@ -7,6 +7,7 @@ import {
 } from "../../common/security/access-control.util";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { EventsGateway } from "../events/events.gateway";
 import { CreateCommentDto } from "./dto/create-comment.dto";
 
 @Injectable()
@@ -14,6 +15,7 @@ export class CommentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   private async getTicketOrFail(ticketId: string) {
@@ -146,6 +148,8 @@ export class CommentsService {
         ticketId,
       });
     }
+
+    this.eventsGateway.emitTicketComment(comment);
 
     return comment;
   }

@@ -53,7 +53,12 @@ export class CategoriesService {
     if (cached) return cached;
 
     const data = await this.prisma.category.findMany({
-      include: { subcategories: true },
+      where: { deletedAt: null },
+      include: {
+        subcategories: {
+          where: { deletedAt: null },
+        },
+      },
       orderBy: { name: "asc" },
     });
     this.cache.set(this.cacheKey, data);
@@ -63,7 +68,11 @@ export class CategoriesService {
   async findById(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { id },
-      include: { subcategories: true },
+      include: {
+        subcategories: {
+          where: { deletedAt: null },
+        },
+      },
     });
     if (!category) throw new NotFoundException("Categoria nao encontrada");
     return category;
@@ -100,17 +109,20 @@ export class CategoriesService {
 
   async remove(actor: AuthUser, id: string) {
     await this.findById(id);
-    await this.prisma.category.delete({ where: { id } });
+    await this.prisma.category.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
     this.cache.clear();
     await this.prisma.auditLog.create({
       data: {
         userId: actor.sub,
         entity: "Category",
         entityId: id,
-        action: "CATEGORY_DELETE",
+        action: "CATEGORY_SOFT_DELETE",
       },
     });
-    return { success: true };
+    return { success: true, message: "Categoria movida para a lixeira" };
   }
 
   async createSubcategory(actor: AuthUser, categoryId: string, dto: CreateSubcategoryDto) {
@@ -163,16 +175,19 @@ export class CategoriesService {
     const existing = await this.prisma.subcategory.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Subcategoria nao encontrada");
 
-    await this.prisma.subcategory.delete({ where: { id } });
+    await this.prisma.subcategory.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
     this.cache.clear();
     await this.prisma.auditLog.create({
       data: {
         userId: actor.sub,
         entity: "Subcategory",
         entityId: id,
-        action: "SUBCATEGORY_DELETE",
+        action: "SUBCATEGORY_SOFT_DELETE",
       },
     });
-    return { success: true };
+    return { success: true, message: "Subcategoria movida para a lixeira" };
   }
 }

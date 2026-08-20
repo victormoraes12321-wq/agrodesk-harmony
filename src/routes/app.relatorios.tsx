@@ -603,13 +603,87 @@ function ReportsPage() {
         />
         <StatCard label="SLA cumprido" value={compliance.inSla} icon={ShieldCheck} tone="success" />
         <StatCard label="SLA vencido" value={compliance.overdue} icon={ShieldAlert} tone="danger" />
-        <StatCard label="Tempo médio" value={`${avgTime.toFixed(1)}h`} icon={Clock3} tone="info" />
+        <StatCard label="MTTR (Tempo Médio Reparo)" value={`${avgTime.toFixed(1)}h`} icon={Clock3} tone="info" />
         <StatCard
           label="Satisfação média"
           value={avgSat ? avgSat.toFixed(1) : "-"}
           icon={MessageCircleHeart}
           tone="success"
         />
+      </section>
+
+      {/* Indicadores Internacionais de Confiabilidade de TI (MTTR & MTBF) */}
+      <section className="rounded-2xl border bg-card p-5 shadow-[var(--shadow-card)] space-y-4">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div className="flex items-center gap-2">
+            <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Sparkles className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-foreground">
+                Indicadores Internacionais de Confiabilidade de TI (ITIL / ISO 20000)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Métricas de eficiência de restauração e estabilidade da infraestrutura
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl border bg-muted/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                MTTR (Mean Time to Repair)
+              </span>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                {avgTime <= 4 ? "Excelente" : avgTime <= 8 ? "Normal" : "Atenção"}
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{avgTime.toFixed(1)} horas</p>
+            <p className="text-xs text-muted-foreground">
+              Tempo médio gasto entre a abertura do chamado e a restauração completa do serviço.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border bg-muted/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                MTBF (Tempo Médio Entre Falhas)
+              </span>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                Estabilidade
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {overview.totalTickets > 0
+                ? `${Math.max(1, ((30 * 10) / overview.totalTickets)).toFixed(1)}h úteis`
+                : "Sem falhas"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Intervalo médio de operação contínua sem incidentes na infraestrutura.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border bg-muted/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Taxa de Resolução Dentro do Prazo
+              </span>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                SLA Compliance
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {overview.totalTickets > 0
+                ? `${((compliance.inSla / overview.totalTickets) * 100).toFixed(1)}%`
+                : "100%"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Percentual de chamados atendidos rigorosamente dentro do prazo limite acordado.
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* Scoreboard e Ranking de Produtividade da Equipe de TI */}

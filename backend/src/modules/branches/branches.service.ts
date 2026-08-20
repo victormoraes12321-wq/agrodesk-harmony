@@ -38,7 +38,10 @@ export class BranchesService {
     const cached = this.cache.get(this.cacheKey);
     if (cached) return cached;
 
-    const data = await this.prisma.branch.findMany({ orderBy: { name: "asc" } });
+    const data = await this.prisma.branch.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+    });
     this.cache.set(this.cacheKey, data);
     return data;
   }
@@ -74,16 +77,19 @@ export class BranchesService {
 
   async remove(actor: AuthUser, id: string) {
     await this.findById(id);
-    await this.prisma.branch.delete({ where: { id } });
+    await this.prisma.branch.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
     this.cache.clear();
     await this.prisma.auditLog.create({
       data: {
         userId: actor.sub,
         entity: "Branch",
         entityId: id,
-        action: "BRANCH_DELETE",
+        action: "BRANCH_SOFT_DELETE",
       },
     });
-    return { success: true };
+    return { success: true, message: "Filial movida para a lixeira" };
   }
 }

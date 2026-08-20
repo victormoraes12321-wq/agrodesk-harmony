@@ -230,7 +230,11 @@ function NewTicketPage() {
     }
 
     if (step === 3) {
-      return form.description.trim().length >= 10;
+      return (
+        form.categoryId.trim().length > 0 &&
+        form.subcategoryId.trim().length > 0 &&
+        form.description.trim().length >= 10
+      );
     }
 
     return true;
@@ -245,6 +249,8 @@ function NewTicketPage() {
       requesterEmail: form.requesterEmail,
       departmentId: form.departmentId,
       branchId: form.branchId,
+      categoryId: form.categoryId,
+      subcategoryId: form.subcategoryId,
       description: form.description,
     });
 
@@ -519,24 +525,85 @@ function NewTicketPage() {
 
           {step === 3 && (
             <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center justify-between">
+                    <span>Categoria do Chamado *</span>
+                    {selectedCategory && (
+                      <span className="text-[11px] font-mono font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                        ⏱️ SLA: {selectedCategory.defaultSlaHours}h úteis
+                      </span>
+                    )}
+                  </Label>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary"
+                    value={form.categoryId}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        categoryId: event.target.value,
+                        subcategoryId: "",
+                      }))
+                    }
+                  >
+                    <option value="">Selecione uma categoria (Obrigatório)...</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} — ({category.defaultSlaHours}h úteis)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center justify-between">
+                    <span>Subcategoria / Serviço *</span>
+                    {form.subcategoryId && (subcategories.find((s) => s.id === form.subcategoryId) as any)?.defaultSlaHours && (
+                      <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                        ⏱️ SLA: {(subcategories.find((s) => s.id === form.subcategoryId) as any)?.defaultSlaHours}h úteis
+                      </span>
+                    )}
+                  </Label>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-primary"
+                    value={form.subcategoryId}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, subcategoryId: event.target.value }))
+                    }
+                    disabled={subcategories.length === 0}
+                  >
+                    <option value="">
+                      {form.categoryId
+                        ? "Selecione a subcategoria específica..."
+                        : "Selecione a categoria primeiro"}
+                    </option>
+                    {subcategories.map((subcategory) => (
+                      <option key={subcategory.id} value={subcategory.id}>
+                        {subcategory.name} {(subcategory as any).defaultSlaHours ? `(${(subcategory as any).defaultSlaHours}h)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label>O que esta acontecendo? *</Label>
+                <Label>O que está acontecendo? (Descrição Detalhada) *</Label>
                 <Textarea
                   value={form.description}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, description: event.target.value }))
                   }
-                  rows={6}
-                  placeholder="Descreva o problema de forma simples. Ex: impressora nao imprime no caixa 2."
+                  rows={5}
+                  placeholder="Descreva o problema com detalhes. Ex: Impressora do caixa 2 não está puxando papel."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Titulo (opcional)</Label>
+                <Label>Título / Resumo (opcional)</Label>
                 <Input
                   value={form.title}
                   onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-                  placeholder="Resumo curto do chamado"
+                  placeholder="Resumo curto da solicitação"
                 />
               </div>
             </>
@@ -664,50 +731,9 @@ function NewTicketPage() {
               </div>
 
               <div className="rounded-xl border p-4 bg-muted/20 space-y-4">
-                <p className="text-sm font-medium">Detalhes opcionais</p>
+                <p className="text-sm font-medium">Detalhes complementares (opcionais)</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <select
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium"
-                      value={form.categoryId}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          categoryId: event.target.value,
-                          subcategoryId: "",
-                        }))
-                      }
-                    >
-                      <option value="">Não informado (SLA Padrão: 24h)</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name} ({category.defaultSlaHours}h)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Subcategoria</Label>
-                    <select
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                      value={form.subcategoryId}
-                      onChange={(event) =>
-                        setForm((prev) => ({ ...prev, subcategoryId: event.target.value }))
-                      }
-                      disabled={subcategories.length === 0}
-                    >
-                      <option value="">Não informado</option>
-                      {subcategories.map((subcategory) => (
-                        <option key={subcategory.id} value={subcategory.id}>
-                          {subcategory.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Prioridade sugerida</Label>
                     <select
@@ -720,12 +746,11 @@ function NewTicketPage() {
                         }))
                       }
                     >
-                      <option value="">Não informado</option>
-                      {PRIORITY_LEVELS.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priorityLabel[priority]}
-                        </option>
-                      ))}
+                      <option value="">Automática pelo SLA da Categoria</option>
+                      <option value="BAIXA">Baixa</option>
+                      <option value="MEDIA">Média</option>
+                      <option value="ALTA">Alta</option>
+                      <option value="CRITICA">Crítica (Urgência Operacional)</option>
                     </select>
                     <p className="text-xs text-muted-foreground">
                       A prioridade real é definida pela equipe TI_ADMIN.

@@ -10,6 +10,8 @@ import {
   UserCheck,
   UserRoundSearch,
   X,
+  Rows3,
+  LayoutList,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -172,6 +174,7 @@ function TicketsManagementPage() {
   const [waitingReason, setWaitingReason] = useState("");
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
 
   const setBusy = useCallback((ticketId: string, value: boolean) => {
     setBusyIds((prev) => ({ ...prev, [ticketId]: value }));
@@ -551,14 +554,29 @@ function TicketsManagementPage() {
               <option value="PROXIMO">SLA proximo</option>
             </select>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={clearFilters}
-              disabled={activeFilterCount === 0}
-            >
-              <X className="size-4" /> Limpar filtros
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant={density === "compact" ? "secondary" : "outline"}
+                size="sm"
+                className="h-10 text-xs gap-1.5"
+                onClick={() => setDensity((prev) => (prev === "compact" ? "comfortable" : "compact"))}
+                title={density === "compact" ? "Alternar para Modo Confortável" : "Alternar para Modo Compacto"}
+              >
+                {density === "compact" ? <Rows3 className="size-4 text-primary" /> : <LayoutList className="size-4" />}
+                <span>{density === "compact" ? "Modo Compacto" : "Modo Confortável"}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearFilters}
+                disabled={activeFilterCount === 0}
+                className="h-10"
+              >
+                <X className="size-4" /> Limpar filtros
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -703,27 +721,28 @@ function TicketsManagementPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1520px]">
-                  <thead className="bg-muted/45 text-xs uppercase tracking-wide text-muted-foreground">
+                  <thead className="bg-muted/45 uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="text-left px-3 py-3">Numero OS</th>
-                      <th className="text-left px-3 py-3">Titulo/resumo</th>
-                      <th className="text-left px-3 py-3">Solicitante</th>
-                      <th className="text-left px-3 py-3">Telefone</th>
-                      <th className="text-left px-3 py-3">Setor</th>
-                      <th className="text-left px-3 py-3">Filial</th>
-                      <th className="text-left px-3 py-3">Categoria</th>
-                      <th className="text-left px-3 py-3">Prioridade</th>
-                      <th className="text-left px-3 py-3">Status</th>
-                      <th className="text-left px-3 py-3">Responsavel</th>
-                      <th className="text-left px-3 py-3">Abertura</th>
-                      <th className="text-left px-3 py-3">SLA</th>
-                      <th className="text-left px-3 py-3">Acoes rapidas</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Numero OS</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Titulo/resumo</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Solicitante</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Telefone</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Setor</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Filial</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Categoria</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Prioridade</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Status</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Responsavel</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Abertura</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>SLA</th>
+                      <th className={`text-left ${density === "compact" ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs"}`}>Acoes rapidas</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginated.map((ticket) => {
                       const busy = busyIds[ticket.id] === true;
                       const isRecent = recentTicketIds.includes(ticket.id);
+                      const tdClass = density === "compact" ? "px-2.5 py-1.5 text-xs" : "px-3 py-3 text-sm";
                       return (
                         <tr
                           key={ticket.id}
@@ -733,29 +752,29 @@ function TicketsManagementPage() {
                               : "hover:bg-muted/20"
                           }`}
                         >
-                          <td className="px-3 py-3 font-medium">{ticket.protocol}</td>
-                          <td className="px-3 py-3 max-w-[220px]">
+                          <td className={`${tdClass} font-medium`}>{ticket.protocol}</td>
+                          <td className={`${tdClass} max-w-[220px]`}>
                             <p className="font-medium">{ticket.title}</p>
                             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                               {ticket.description}
                             </p>
                           </td>
-                          <td className="px-3 py-3 text-sm">{ticket.requesterName}</td>
-                          <td className="px-3 py-3 text-sm">{ticket.requesterPhone}</td>
-                          <td className="px-3 py-3 text-sm">
+                          <td className={tdClass}>{ticket.requesterName}</td>
+                          <td className={tdClass}>{ticket.requesterPhone}</td>
+                          <td className={tdClass}>
                             {getDepartmentName(departments, ticket.departmentId)}
                           </td>
-                          <td className="px-3 py-3 text-sm">
+                          <td className={tdClass}>
                             {getBranchName(branches, ticket.branchId)}
                           </td>
-                          <td className="px-3 py-3 text-sm">
+                          <td className={tdClass}>
                             {getCategoryName(categories, ticket.categoryId)}
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="space-y-2">
+                          <td className={tdClass}>
+                            <div className="space-y-1.5">
                               <PriorityBadge priority={ticket.priority} />
                               <select
-                                className="h-8 rounded-md border bg-background px-2 text-xs"
+                                className="h-7 rounded-md border bg-background px-2 text-xs"
                                 value={ticket.priority}
                                 onChange={(event) =>
                                   void onPriority(ticket, event.target.value as Ticket["priority"])
@@ -770,11 +789,11 @@ function TicketsManagementPage() {
                               </select>
                             </div>
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="space-y-2">
+                          <td className={tdClass}>
+                            <div className="space-y-1.5">
                               <StatusBadge status={ticket.status} />
                               <select
-                                className="h-8 rounded-md border bg-background px-2 text-xs"
+                                className="h-7 rounded-md border bg-background px-2 text-xs"
                                 value={ticket.status}
                                 onChange={(event) =>
                                   void onStatus(ticket, event.target.value as Ticket["status"])
@@ -789,12 +808,12 @@ function TicketsManagementPage() {
                               </select>
                             </div>
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="text-sm mb-2">
+                          <td className={tdClass}>
+                            <div className="text-xs font-medium mb-1">
                               {getUserName(users, ticket.assigneeId)}
                             </div>
                             <select
-                              className="h-8 rounded-md border bg-background px-2 text-xs"
+                              className="h-7 rounded-md border bg-background px-2 text-xs"
                               value={ticket.assigneeId ?? ""}
                               onChange={(event) => void onAssign(ticket, event.target.value)}
                               disabled={busy}
@@ -807,10 +826,10 @@ function TicketsManagementPage() {
                               ))}
                             </select>
                           </td>
-                          <td className="px-3 py-3 text-xs text-muted-foreground">
+                          <td className={`${tdClass} text-muted-foreground`}>
                             {formatDateTime(ticket.createdAt)}
                           </td>
-                          <td className="px-3 py-3">
+                          <td className={tdClass}>
                             <TicketSlaChip
                               createdAt={ticket.createdAt}
                               slaHours={ticket.slaHours}
@@ -819,7 +838,7 @@ function TicketsManagementPage() {
                               slaDueAt={ticket.slaDueAt}
                             />
                           </td>
-                          <td className="px-3 py-3">
+                          <td className={tdClass}>
                             <div className="flex flex-wrap gap-1.5">
                               <Button size="sm" variant="outline" asChild disabled={busy}>
                                 <Link to="/app/chamados/$id" params={{ id: ticket.id }}>

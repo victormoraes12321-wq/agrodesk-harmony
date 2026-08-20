@@ -9,6 +9,8 @@ import { getAssets } from "@/services/patrimonio-api";
 import { Search, FileText, Laptop, ArrowRightLeft, Activity, Plus } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useSocketEvents } from "@/hooks/use-socket";
+import { CommandPalette } from "@/components/common/CommandPalette";
 
 const ADMIN_ONLY_ROUTES = new Set([
   "/app/dashboard",
@@ -21,6 +23,7 @@ const ADMIN_ONLY_ROUTES = new Set([
   "/app/categorias",
   "/app/auditoria",
   "/app/configuracoes",
+  "/app/lixeira",
 ]);
 
 const REQUESTER_ONLY_ROUTES = new Set(["/app/portal", "/app/meus-chamados"]);
@@ -31,6 +34,7 @@ export const Route = createFileRoute("/app")({
 
 function AppLayout() {
   const { currentUser, loading, tickets } = useApp();
+  useSocketEvents();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [open, setOpen] = useState(false);
@@ -146,6 +150,8 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <CommandPalette />
 
       {/* Floating Action Button (FAB) */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">

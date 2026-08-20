@@ -42,7 +42,9 @@ export const newTicketSchema = z.object({
   requesterPhone: z.string().trim().min(6, "Telefone obrigatorio."),
   departmentId: z.string().trim().min(1, "Setor obrigatorio."),
   branchId: z.string().trim().min(1, "Filial/local obrigatorio."),
-  description: z.string().trim().min(10, "Descreva o problema com mais detalhes."),
+  categoryId: z.string().trim().min(1, "Selecione a categoria do chamado."),
+  subcategoryId: z.string().trim().min(1, "Selecione a subcategoria do chamado."),
+  description: z.string().trim().min(10, "Descreva o problema com mais detalhes (mínimo 10 caracteres)."),
   requesterEmail: z.string().trim().optional(),
 });
 

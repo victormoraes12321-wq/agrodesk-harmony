@@ -24,6 +24,8 @@ import { AssetTypesModule } from './modules/asset-types/asset-types.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AssetMovementsModule } from './modules/asset-movements/asset-movements.module';
 import { AssetMaintenancesModule } from './modules/asset-maintenances/asset-maintenances.module';
+import { EventsModule } from './modules/events/events.module';
+import { TrashModule } from './modules/trash/trash.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { AssetMaintenancesModule } from './modules/asset-maintenances/asset-main
       },
     ]),
     PrismaModule,
+    EventsModule,
+    TrashModule,
     AuthModule,
     UsersModule,
     DepartmentsModule,

@@ -9,6 +9,7 @@ import { toJsonValue } from "../../common/utils/json-value.util";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { SlaService } from "../sla/sla.service";
+import { EventsGateway } from "../events/events.gateway";
 import { CreateTicketDto } from "./dto/create-ticket.dto";
 import { UpdateTicketDto } from "./dto/update-ticket.dto";
 import { AssignTicketDto } from "./dto/assign-ticket.dto";
@@ -20,12 +21,69 @@ import { RateTicketDto } from "./dto/rate-ticket.dto";
 import { ListTicketsQueryDto } from "./dto/list-tickets-query.dto";
 import { PrepareWhatsappMessageDto } from "./dto/prepare-whatsapp-message.dto";
 
+/**
+ * Calcula a data de vencimento considerando apenas o expediente útil:
+ * Segunda a Sexta, das 08:00 às 18:00 (10 horas úteis por dia).
+ * Finais de semana e noites são pausados.
+ */
+export function calculateBusinessSlaDueAt(startDate: Date, slaHours: number): Date {
+  const current = new Date(startDate);
+  let remainingMinutes = Math.max(1, Math.round(slaHours * 60));
+
+  while (remainingMinutes > 0) {
+    const day = current.getDay(); // 0: Dom, 6: Sáb
+    const hour = current.getHours();
+    const minute = current.getMinutes();
+
+    // Se for domingo -> move para segunda às 08:00
+    if (day === 0) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(8, 0, 0, 0);
+      continue;
+    }
+    // Se for sábado -> move para segunda às 08:00
+    if (day === 6) {
+      current.setDate(current.getDate() + 2);
+      current.setHours(8, 0, 0, 0);
+      continue;
+    }
+
+    // Se for dia útil antes das 08:00 -> move para 08:00
+    if (hour < 8) {
+      current.setHours(8, 0, 0, 0);
+      continue;
+    }
+
+    // Se for dia útil após as 18:00 -> move para o dia útil seguinte às 08:00
+    if (hour >= 18) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(8, 0, 0, 0);
+      continue;
+    }
+
+    // Dentro do expediente útil (08:00 às 18:00)
+    const minutesLeftToday = (18 - hour) * 60 - minute;
+
+    if (remainingMinutes <= minutesLeftToday) {
+      current.setMinutes(current.getMinutes() + remainingMinutes);
+      remainingMinutes = 0;
+    } else {
+      remainingMinutes -= minutesLeftToday;
+      current.setDate(current.getDate() + 1);
+      current.setHours(8, 0, 0, 0);
+    }
+  }
+
+  return current;
+}
+
 @Injectable()
 export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly slaService: SlaService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   private async generateProtocol(db: PrismaService | Prisma.TransactionClient = this.prisma) {
@@ -118,7 +176,7 @@ export class TicketsService {
   }
 
   private buildDueAt(baseDate: Date, hours: number) {
-    return new Date(baseDate.getTime() + hours * 3600000);
+    return calculateBusinessSlaDueAt(baseDate, hours);
   }
 
   async create(actor: AuthUser, dto: CreateTicketDto) {
@@ -302,6 +360,8 @@ export class TicketsService {
       message: `${created.protocolNumber} aberta por ${created.requesterName}`,
       ticketId: created.id,
     });
+
+    this.eventsGateway.emitTicketCreated(created);
 
     return created;
   }
@@ -582,6 +642,8 @@ export class TicketsService {
       });
     }
 
+    this.eventsGateway.emitTicketUpdated(updated);
+
     return updated;
   }
 
@@ -617,6 +679,8 @@ export class TicketsService {
       beforeJson: { realPriority: ticket.realPriority },
       afterJson: { realPriority: dto.realPriority },
     });
+
+    this.eventsGateway.emitTicketUpdated(updated);
 
     return updated;
   }
@@ -654,6 +718,16 @@ export class TicketsService {
       if (!ticket.closedAt) data.closedAt = new Date();
     }
     if (dto.status === TicketStatus.REOPENED) {
+      const rawDate = ticket.closedAt ?? ticket.resolvedAt;
+      if (rawDate) {
+        const refDate = new Date(rawDate);
+        const hoursPassed = (Date.now() - refDate.getTime()) / 3600000;
+        if (hoursPassed > 48) {
+          throw new BadRequestException(
+            "O prazo de 48 horas para reabertura direta expirou. Por favor, abra uma nova Ordem de Serviço com referência a este chamado.",
+          );
+        }
+      }
       data.closedAt = null;
       data.resolvedAt = null;
       data.reopenedAt = new Date();
@@ -768,6 +842,8 @@ export class TicketsService {
       });
     }
 
+    this.eventsGateway.emitTicketUpdated(updated);
+
     return updated;
   }
 
@@ -799,8 +875,16 @@ export class TicketsService {
       userId: actor.sub,
       entityId: id,
       action: "TICKET_TECHNICAL_UPDATE",
-      afterJson: dto,
+      afterJson: {
+        diagnosis: dto.diagnosis,
+        solution: dto.solution,
+        rootCause: dto.rootCause,
+        usedParts: dto.partsUsed,
+        timeSpentMinutes: dto.timeSpentMinutes,
+      },
     });
+
+    this.eventsGateway.emitTicketUpdated(updated);
 
     return updated;
   }
@@ -855,6 +939,8 @@ export class TicketsService {
       afterJson: { slaDueAt: nextSlaDueAt, reason: dto.reason, extendHours: dto.extendHours },
     });
 
+    this.eventsGateway.emitTicketUpdated(updated);
+
     return updated;
   }
 
@@ -867,6 +953,21 @@ export class TicketsService {
   }
 
   async reopen(actor: AuthUser, id: string, note?: string) {
+    const ticket = await this.prisma.ticket.findUnique({ where: { id } });
+    if (!ticket) throw new NotFoundException("OS nao encontrada");
+    if (actor.role !== UserRole.TI_ADMIN && ticket.requesterId !== actor.sub) {
+      await this.denyAccess(actor, id, "TICKET_REOPEN_DENIED", "Apenas solicitante ou TI_ADMIN pode reabrir");
+    }
+    const rawDate = ticket.closedAt ?? ticket.resolvedAt;
+    if (rawDate) {
+      const refDate = new Date(rawDate);
+      const hoursPassed = (Date.now() - refDate.getTime()) / 3600000;
+      if (hoursPassed > 48) {
+        throw new BadRequestException(
+          "O prazo de 48 horas para reabertura direta expirou. Por favor, abra uma nova Ordem de Serviço com referência a este chamado.",
+        );
+      }
+    }
     return this.updateStatus(actor, id, { status: TicketStatus.REOPENED, note }, "TICKET_REOPEN");
   }
 
