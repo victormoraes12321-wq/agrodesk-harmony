@@ -33,19 +33,10 @@ const BLOCKED_EXTENSIONS = new Set([
   ".dll",
   ".com",
   ".scr",
-  ".jar",
-  ".js",
-]);
-const ALLOWED_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-  "text/plain",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
+  ".vbs",
+  ".pif",
+  ".gadget",
+  ".application",
 ]);
 
 @ApiTags("Attachments")
@@ -87,11 +78,7 @@ export class AttachmentsController {
       fileFilter: (_req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
         if (BLOCKED_EXTENSIONS.has(ext)) {
-          cb(new BadRequestException("Executaveis nao sao permitidos") as unknown as Error, false);
-          return;
-        }
-        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-          cb(new BadRequestException("Tipo de arquivo nao permitido") as unknown as Error, false);
+          cb(new BadRequestException("Arquivos executáveis não são permitidos por segurança.") as unknown as Error, false);
           return;
         }
         cb(null, true);

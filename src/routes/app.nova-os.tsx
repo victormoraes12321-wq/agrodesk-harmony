@@ -1,6 +1,24 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Clock3, FileImage, Send } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  Clock3,
+  FileArchive,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  Paperclip,
+  Plus,
+  Send,
+  Trash2,
+  UploadCloud,
+  UserCheck,
+  Zap,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { getAssets } from "@/services/patrimonio-api";
@@ -14,7 +32,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PageLoading } from "@/components/ui/page-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { usePageLoading } from "@/hooks/use-page-loading";
-import { priorityLabel, statusLabel } from "@/lib/format";
+import { maskPhone, priorityLabel, statusLabel } from "@/lib/format";
 import { formatBranchName } from "@/lib/helpdesk";
 import { useApp } from "@/lib/store";
 import { newTicketSchema } from "@/lib/validation";
@@ -45,15 +63,43 @@ type FormData = {
 };
 
 const STEP_TITLES = [
-  "Como podemos falar com voce?",
-  "Onde esta acontecendo?",
-  "O que esta acontecendo?",
-  "Tem print ou imagem?",
-  "Revisao e envio",
+  "Como podemos falar com você?",
+  "Onde está acontecendo?",
+  "O que está acontecendo?",
+  "Anexos e Documentos",
+  "Revisão e envio",
 ] as const;
 
+function formatBytes(bytes: number) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getFileIcon(fileName: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg", "heic"].includes(ext)) {
+    return <FileImage className="size-4 text-blue-500 shrink-0" />;
+  }
+  if (["pdf"].includes(ext)) {
+    return <FileText className="size-4 text-rose-500 shrink-0" />;
+  }
+  if (["xls", "xlsx", "csv", "ods", "ofx", "qif", "rem", "ret"].includes(ext)) {
+    return <FileSpreadsheet className="size-4 text-emerald-500 shrink-0" />;
+  }
+  if (["xml", "json", "sql", "log", "txt", "html", "css", "ts", "js", "yaml", "yml"].includes(ext)) {
+    return <FileCode className="size-4 text-amber-500 shrink-0" />;
+  }
+  if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(ext)) {
+    return <FileArchive className="size-4 text-purple-500 shrink-0" />;
+  }
+  return <Paperclip className="size-4 text-primary shrink-0" />;
+}
+
 function NewTicketPage() {
-  const { currentUser, departments, branches, categories, createTicket } = useApp();
+  const { currentUser, users, departments, branches, categories, createTicket } = useApp();
   const loading = usePageLoading();
   const [step, setStep] = useState(1);
   const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);
@@ -61,6 +107,85 @@ function NewTicketPage() {
   const [createdStatus, setCreatedStatus] = useState<Ticket["status"] | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAppendFiles = (newFilesList: FileList | File[] | null) => {
+    if (!newFilesList || newFilesList.length === 0) return;
+    const incoming = Array.from(newFilesList);
+
+    setFiles((prev) => {
+      const existingKeySet = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const nonDuplicates: File[] = [];
+      let duplicateCount = 0;
+
+      for (const f of incoming) {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (!existingKeySet.has(key)) {
+          existingKeySet.add(key);
+          nonDuplicates.push(f);
+        } else {
+          duplicateCount++;
+        }
+      }
+
+      if (duplicateCount > 0) {
+        toast.info(`${duplicateCount} arquivo(s) já adicionado(s) foram ignorados.`);
+      }
+      if (nonDuplicates.length > 0) {
+        toast.success(`${nonDuplicates.length} arquivo(s) adicionado(s).`);
+      }
+
+      return [...prev, ...nonDuplicates];
+    });
+  };
+
+  const handleRemoveFile = (indexToRemove: number) => {
+    setFiles((prev) => {
+      const target = prev[indexToRemove];
+      if (target) {
+        toast.info(`Arquivo "${target.name}" removido.`);
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  const handleClearAllFiles = () => {
+    setFiles([]);
+    toast.info("Todos os anexos foram removidos.");
+  };
+
+  const [targetUserId, setTargetUserId] = useState<string>("");
+  const [resolveImmediately, setResolveImmediately] = useState<boolean>(false);
+  const [resolutionNotes, setResolutionNotes] = useState<string>("");
+
+  const handleSelectTargetUser = (id: string) => {
+    setTargetUserId(id);
+    if (!id) {
+      setForm((prev) => ({
+        ...prev,
+        requesterName: currentUser?.name ?? "",
+        requesterPhone: currentUser?.phone ?? "",
+        requesterEmail: currentUser?.email ?? "",
+        departmentId: currentUser?.departmentId ?? departments[0]?.id ?? "",
+        branchId: currentUser?.branchId ?? branches[0]?.id ?? "",
+      }));
+      return;
+    }
+
+    const selectedUser = users.find((u) => u.id === id);
+    if (selectedUser) {
+      setForm((prev) => ({
+        ...prev,
+        requesterName: selectedUser.name,
+        requesterPhone: selectedUser.phone || selectedUser.whatsapp || "(00) 00000-0000",
+        requesterEmail: selectedUser.email || "",
+        departmentId: selectedUser.departmentId || prev.departmentId,
+        branchId: selectedUser.branchId || prev.branchId,
+      }));
+      toast.info(`Dados de ${selectedUser.name} carregados para a Ordem de Serviço.`);
+    }
+  };
 
   const initialData = useMemo<FormData>(
     () => ({
@@ -128,13 +253,18 @@ function NewTicketPage() {
       return;
     }
 
+    if (resolveImmediately && !resolutionNotes.trim()) {
+      toast.error("Por favor, informe a descrição da solução / atendimento realizado.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const ticket = await createTicket(
         {
           title: form.title,
           description: form.description,
-          requesterId: currentUser.id,
+          requesterId: targetUserId || currentUser.id,
           requesterName: form.requesterName,
           requesterPhone: form.requesterPhone,
           requesterEmail: form.requesterEmail,
@@ -149,6 +279,9 @@ function NewTicketPage() {
           bestTime: form.bestTime || undefined,
           impact: form.impact || undefined,
           additionalNotes: form.additionalNotes || undefined,
+          targetUserId: targetUserId || undefined,
+          resolveImmediately: resolveImmediately || undefined,
+          resolutionNotes: resolutionNotes || undefined,
         },
         files,
       );
@@ -156,7 +289,12 @@ function NewTicketPage() {
       setCreatedTicketId(ticket.id);
       setCreatedProtocol(ticket.protocol);
       setCreatedStatus(ticket.status);
-      toast.success("OS registrada com sucesso", { description: `Protocolo ${ticket.protocol}` });
+      toast.success(
+        resolveImmediately
+          ? `OS ${ticket.protocol} registrada e FINALIZADA na hora!`
+          : "OS registrada com sucesso",
+        { description: `Protocolo ${ticket.protocol}` },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nao foi possivel abrir a OS.";
       toast.error(message);
@@ -266,8 +404,35 @@ function NewTicketPage() {
         <CardContent className="space-y-4">
           {step === 1 && (
             <>
+              {currentUser.role === "TI_ADMIN" && (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3 mb-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold flex items-center gap-2 text-primary">
+                      <UserCheck className="size-4" /> Abrir OS em Nome de Outro Usuário (Atendimento Presencial / Balcão)
+                    </Label>
+                  </div>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium"
+                    value={targetUserId}
+                    onChange={(e) => handleSelectTargetUser(e.target.value)}
+                  >
+                    <option value="">-- Em meu próprio nome ({currentUser.name}) --</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} {u.jobTitle ? `(${u.jobTitle})` : ""} - {departments.find((d) => d.id === u.departmentId)?.name ?? "Sem Setor"}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione o funcionário que veio conversar no suporte. Nome, telefone, setor e filial serão preenchidos automaticamente.
+                  </p>
+                </div>
+              )}
+
               <p className="text-sm text-muted-foreground">
-                Esses dados ja vieram do seu perfil. Se precisar, voce pode ajustar agora.
+                {targetUserId
+                  ? "Dados do solicitante selecionado (ajuste se necessário):"
+                  : "Esses dados ja vieram do seu perfil. Se precisar, voce pode ajustar agora."}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -287,7 +452,7 @@ function NewTicketPage() {
                   <Input
                     value={form.requesterPhone}
                     onChange={(event) =>
-                      setForm((prev) => ({ ...prev, requesterPhone: event.target.value }))
+                      setForm((prev) => ({ ...prev, requesterPhone: maskPhone(event.target.value) }))
                     }
                     placeholder="(00) 00000-0000"
                   />
@@ -379,22 +544,121 @@ function NewTicketPage() {
 
           {step === 4 && (
             <>
-              <div className="space-y-2">
-                <Label>Tem print ou imagem? (opcional)</Label>
-                <Input
-                  type="file"
-                  multiple
-                  disabled={submitting}
-                  onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-                />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Paperclip className="size-4 text-primary" /> Anexos e Documentos (opcional)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Envie imagens, prints, PDFs, arquivos bancários (.OFX), planilhas, notas fiscais (.XML), relatórios ou qualquer documento de apoio.
+                    </p>
+                  </div>
+                  {files.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearAllFiles}
+                      className="text-xs h-7 text-muted-foreground hover:text-destructive gap-1"
+                    >
+                      <Trash2 className="size-3.5" /> Remover todos ({files.length})
+                    </Button>
+                  )}
+                </div>
+
+                {/* Drag & Drop Upload Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    handleAppendFiles(e.dataTransfer.files);
+                  }}
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer select-none ${
+                    isDragging
+                      ? "border-primary bg-primary/10 scale-[1.01]"
+                      : "border-border hover:border-primary/50 hover:bg-muted/30 bg-muted/10"
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    disabled={submitting}
+                    className="hidden"
+                    onChange={(event) => {
+                      handleAppendFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                      <UploadCloud className="size-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        Clique para selecionar ou arraste seus arquivos aqui
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Aceita <strong>todos os formatos</strong> (.OFX, .PDF, .PNG, .JPG, .XLSX, .XML, .ZIP, etc.) até 10MB por arquivo.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 text-xs h-8 gap-1.5 pointer-events-none"
+                    >
+                      <Plus className="size-3.5" /> Selecionar Arquivos
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Staged Files List */}
                 {files.length > 0 && (
-                  <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
-                    {files.map((file) => (
-                      <div key={file.name} className="text-sm flex items-center gap-2">
-                        <FileImage className="size-4 text-muted-foreground" />
-                        {file.name} ({Math.max(1, Math.round(file.size / 1024))} KB)
-                      </div>
-                    ))}
+                  <div className="rounded-2xl border bg-card p-3 space-y-2 shadow-xs">
+                    <div className="text-xs font-semibold text-muted-foreground px-1 flex items-center justify-between">
+                      <span>Arquivos selecionados para envio ({files.length}):</span>
+                      <span>Total: {formatBytes(files.reduce((acc, f) => acc + f.size, 0))}</span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {files.map((file, idx) => (
+                        <div
+                          key={`${file.name}-${file.size}-${idx}`}
+                          className="rounded-xl border bg-muted/20 hover:bg-muted/40 p-2.5 text-xs flex items-center justify-between gap-3 transition-colors group"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {getFileIcon(file.name)}
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate">{file.name}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">
+                                {formatBytes(file.size)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveFile(idx);
+                            }}
+                            title="Remover este arquivo"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -406,7 +670,7 @@ function NewTicketPage() {
                   <div className="space-y-2">
                     <Label>Categoria</Label>
                     <select
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium"
                       value={form.categoryId}
                       onChange={(event) =>
                         setForm((prev) => ({
@@ -416,10 +680,10 @@ function NewTicketPage() {
                         }))
                       }
                     >
-                      <option value="">Nao informado</option>
+                      <option value="">Não informado (SLA Padrão: 24h)</option>
                       {categories.map((category) => (
                         <option key={category.id} value={category.id}>
-                          {category.name}
+                          {category.name} ({category.defaultSlaHours}h)
                         </option>
                       ))}
                     </select>
@@ -435,7 +699,7 @@ function NewTicketPage() {
                       }
                       disabled={subcategories.length === 0}
                     >
-                      <option value="">Nao informado</option>
+                      <option value="">Não informado</option>
                       {subcategories.map((subcategory) => (
                         <option key={subcategory.id} value={subcategory.id}>
                           {subcategory.name}
@@ -456,7 +720,7 @@ function NewTicketPage() {
                         }))
                       }
                     >
-                      <option value="">Nao informado</option>
+                      <option value="">Não informado</option>
                       {PRIORITY_LEVELS.map((priority) => (
                         <option key={priority} value={priority}>
                           {priorityLabel[priority]}
@@ -464,10 +728,21 @@ function NewTicketPage() {
                       ))}
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      A prioridade real e definida pela equipe TI_ADMIN.
+                      A prioridade real é definida pela equipe TI_ADMIN.
                     </p>
                   </div>
                 </div>
+
+                {selectedCategory && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs flex items-center justify-between animate-in fade-in duration-200">
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
+                      <Clock3 className="size-4 text-primary" /> Prazo estimado de atendimento para "{selectedCategory.name}":
+                    </span>
+                    <span className="font-bold text-primary bg-background px-2.5 py-1 rounded-md border shadow-xs">
+                      {selectedCategory.defaultSlaHours}h ({selectedCategory.defaultSlaHours <= 8 ? "Mesmo dia útil" : `${Math.ceil(selectedCategory.defaultSlaHours / 24)} dia(s)`})
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -590,12 +865,70 @@ function NewTicketPage() {
                       <strong>Observacoes:</strong> {form.additionalNotes}
                     </p>
                   )}
-                  <p className="md:col-span-2">
-                    <strong>Anexos:</strong>{" "}
-                    {files.length > 0 ? `${files.length} arquivo(s)` : "Nenhum"}
-                  </p>
+                  <div className="md:col-span-2 space-y-1.5 border-t pt-2 mt-1">
+                    <p className="font-semibold text-foreground flex items-center gap-1.5">
+                      <Paperclip className="size-4 text-primary" /> Anexos ({files.length}):
+                    </p>
+                    {files.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum arquivo anexado.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {files.map((file) => (
+                          <span
+                            key={file.name}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-background text-xs font-medium text-foreground shadow-xs"
+                          >
+                            {getFileIcon(file.name)}
+                            <span className="max-w-xs truncate">{file.name}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              ({formatBytes(file.size)})
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {currentUser.role === "TI_ADMIN" && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="resolveImmediately"
+                      checked={resolveImmediately}
+                      onChange={(e) => setResolveImmediately(e.target.checked)}
+                      className="size-4 rounded border-amber-500 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <Label
+                      htmlFor="resolveImmediately"
+                      className="font-semibold text-amber-700 dark:text-amber-400 cursor-pointer flex items-center gap-1.5 text-sm"
+                    >
+                      <Zap className="size-4 text-amber-500 fill-amber-500" /> Registrar e Finalizar Imediatamente (Atendimento Rápido / Resolvido na Hora)
+                    </Label>
+                  </div>
+
+                  {resolveImmediately && (
+                    <div className="space-y-2 pt-2 border-t border-amber-500/20">
+                      <Label htmlFor="resolutionNotes" className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                        Descrição da Solução / Atendimento Realizado *
+                      </Label>
+                      <Textarea
+                        id="resolutionNotes"
+                        value={resolutionNotes}
+                        onChange={(e) => setResolutionNotes(e.target.value)}
+                        rows={3}
+                        placeholder="Ex: Trocado toner da impressora / cabo de rede no balcão e testado com sucesso."
+                        required
+                      />
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                        ⚡ Esta OS será cadastrada com o status <strong>RESOLVIDO</strong> e atribuída a você no histórico de chamados.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <p className="text-sm text-muted-foreground">
                 Responsavel, prioridade real, diagnostico e status administrativo sao definidos
@@ -636,11 +969,24 @@ function NewTicketPage() {
                 </Button>
               ) : (
                 <Button
-                  className="w-full sm:w-auto"
+                  className={`w-full sm:w-auto ${
+                    resolveImmediately
+                      ? "bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md"
+                      : ""
+                  }`}
                   onClick={() => void onSubmit()}
                   disabled={submitting}
                 >
-                  <Send className="size-4" /> {submitting ? "Enviando..." : "Enviar OS"}
+                  {resolveImmediately ? (
+                    <>
+                      <Zap className="size-4 fill-white" />{" "}
+                      {submitting ? "Finalizando OS..." : "⚡ Registrar e Finalizar OS na Hora"}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-4" /> {submitting ? "Enviando..." : "Enviar OS"}
+                    </>
+                  )}
                 </Button>
               )}
             </div>

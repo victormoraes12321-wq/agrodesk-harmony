@@ -1,4 +1,4 @@
-﻿import { Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { ReportsQueryDto } from "./dto/reports-query.dto";
@@ -38,6 +38,7 @@ export class ReportsService {
     tickets: Array<{
       createdAt: Date;
       closedAt: Date | null;
+      resolvedAt: Date | null;
       slaDueAt: Date | null;
       status: string;
       timeSpentMinutes: number | null;
@@ -62,12 +63,48 @@ export class ReportsService {
     const byStatus = this.groupCount(tickets, (ticket) => ticket.status);
 
     const now = Date.now();
-    const inSla = tickets.filter((ticket) => {
-      const closeRef = ticket.closedAt?.getTime() ?? now;
-      const slaDueAtMs = ticket.slaDueAt?.getTime() ?? now;
-      return closeRef <= slaDueAtMs;
-    }).length;
-    const overdue = tickets.length - inSla;
+    let inSla = 0;
+    let overdue = 0;
+
+    for (const ticket of tickets) {
+      const isCanceled =
+        ticket.status === "CANCELED" ||
+        ticket.status === "CANCELADO";
+      if (isCanceled) {
+        // Canceled tickets are not considered SLA breaches
+        continue;
+      }
+
+      const isClosed = ticket.status === "CLOSED" || ticket.status === "FINALIZADO";
+      const isResolved = ticket.status === "RESOLVED" || ticket.status === "RESOLVIDO";
+      const isPaused =
+        ticket.status === "WAITING_USER" ||
+        ticket.status === "WAITING_PARTS_OR_THIRD_PARTY" ||
+        ticket.status === "AGUARDANDO_USUARIO" ||
+        ticket.status === "AGUARDANDO_PECA";
+
+      const slaDueAtMs = ticket.slaDueAt
+        ? ticket.slaDueAt.getTime()
+        : ticket.createdAt.getTime() + 24 * 3600000;
+
+      if (isClosed || isResolved) {
+        const resolveRef =
+          ticket.resolvedAt?.getTime() ?? ticket.closedAt?.getTime() ?? slaDueAtMs;
+        if (resolveRef <= slaDueAtMs) {
+          inSla++;
+        } else {
+          overdue++;
+        }
+      } else if (isPaused) {
+        inSla++;
+      } else {
+        if (now <= slaDueAtMs) {
+          inSla++;
+        } else {
+          overdue++;
+        }
+      }
+    }
 
     const avgMinutes =
       tickets
@@ -96,6 +133,7 @@ export class ReportsService {
         select: {
           id: true,
           createdAt: true,
+          resolvedAt: true,
           closedAt: true,
           slaDueAt: true,
           status: true,

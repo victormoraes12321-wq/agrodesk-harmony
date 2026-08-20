@@ -28,7 +28,7 @@ export class AssetsController {
   }
 
   @Get()
-  @Roles(UserRole.TI_ADMIN)
+  @Roles(UserRole.TI_ADMIN, UserRole.SOLICITANTE)
   @UseGuards(RolesGuard)
   findAll(@Query() filters: any) {
     return this.assetsService.findAll(filters);

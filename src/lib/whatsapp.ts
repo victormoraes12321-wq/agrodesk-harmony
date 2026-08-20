@@ -86,62 +86,90 @@ export function generateWhatsAppMessage(
   context: WhatsAppMessageContext = {},
 ): string {
   const status = context.statusOverride ?? ticket.status;
-  const requesterName = collapseWhitespace(ticket.requesterName) || "colaborador";
+  const requesterName = collapseWhitespace(ticket.requesterName) || "colaborador(a)";
   const protocol = ticket.protocol;
-  const assignee = collapseWhitespace(context.assigneeName) || "Equipe TI";
-  const department = collapseWhitespace(context.departmentName) || "Nao informado";
-  const branch = collapseWhitespace(context.branchName) || "Nao informado";
-  const category = collapseWhitespace(context.categoryName) || "Nao informada";
-  const summary = compactText(ticket.description, 180);
-  const waitingReason =
-    collapseWhitespace(context.statusSpecificNote) ||
-    collapseWhitespace(ticket.waitingRequesterMessage) ||
-    "Envie os dados solicitados para continuarmos.";
-  const solution = compactText(ticket.solution, 180);
+  const assignee = collapseWhitespace(context.assigneeName) || "Equipe de TI";
+  const department = collapseWhitespace(context.departmentName) || "Não informado";
+  const branch = collapseWhitespace(context.branchName) || "Não informado";
+  const category = collapseWhitespace(context.categoryName) || "Não informada";
+  const title = collapseWhitespace(ticket.title) || "Chamado de Suporte";
+  const summary = compactText(ticket.description, 160);
+  const note = collapseWhitespace(context.statusSpecificNote);
+  const solution = compactText(ticket.solution, 160);
+  const waitingMessage =
+    note || collapseWhitespace(ticket.waitingRequesterMessage) || "Por favor, responda com as informações necessárias.";
 
-  let statusMessage = "";
-  let nextStep = GENERIC_NEXT_STEP;
+  let statusHeader = "";
+  let actionText = "";
 
-  if (status === "ABERTO") {
-    statusMessage = `Sua OS #${protocol} foi registrada com sucesso.`;
-    nextStep = "Nossa equipe de T.I. vai analisar e retornar com os proximos passos.";
-  } else if (status === "EM_ANALISE") {
-    statusMessage = `Sua OS #${protocol} esta em analise pela equipe de T.I.`;
-    nextStep = "Estamos validando as informacoes para definir o melhor atendimento.";
-  } else if (status === "EM_ATENDIMENTO") {
-    statusMessage = `Sua OS #${protocol} esta em atendimento ativo.`;
-    nextStep = `Responsavel atual: ${assignee}.`;
-  } else if (status === "AGUARDANDO_USUARIO") {
-    statusMessage = `Para continuarmos sua OS #${protocol}, precisamos da sua resposta.`;
-    nextStep = `Retorno esperado: ${waitingReason}`;
-  } else if (status === "AGUARDANDO_PECA") {
-    statusMessage = `Sua OS #${protocol} esta aguardando peca, liberacao ou suporte de terceiro.`;
-    nextStep = "Assim que houver atualizacao, retomamos o atendimento imediatamente.";
-  } else if (status === "RESOLVIDO") {
-    statusMessage = `Sua OS #${protocol} foi marcada como resolvida.`;
-    nextStep = `Solucao aplicada: ${solution}. Se persistir, responda por aqui para ajustarmos.`;
-  } else if (status === "FINALIZADO") {
-    statusMessage = `Sua OS #${protocol} foi finalizada.`;
-    nextStep = "Se precisar de novo suporte, abra uma nova OS no AgroDesk TI.";
-  } else if (status === "CANCELADO") {
-    statusMessage = `Sua OS #${protocol} foi cancelada.`;
-    nextStep = context.statusSpecificNote
-      ? `Motivo: ${compactText(context.statusSpecificNote, 160)}`
-      : "Se ainda precisar de suporte, entre em contato com a T.I. ou abra nova OS.";
-  } else if (status === "REABERTO") {
-    statusMessage = `Sua OS #${protocol} foi reaberta e voltou para atendimento da T.I.`;
-    nextStep = "Vamos seguir com novos testes e te atualizar por aqui.";
+  switch (status) {
+    case "ABERTO":
+      statusHeader = `🟡 *OS #${protocol} REGISTRADA*`;
+      actionText = `Sua Ordem de Serviço foi recebida com sucesso e aguarda triagem da equipe de TI.`;
+      break;
+
+    case "EM_ANALISE":
+      statusHeader = `🔵 *OS #${protocol} EM ANÁLISE*`;
+      actionText = `Sua OS está em análise técnica para diagnóstico inicial.`;
+      break;
+
+    case "EM_ATENDIMENTO":
+      statusHeader = `🟢 *OS #${protocol} EM ATENDIMENTO*`;
+      actionText = `Técnico responsável: *${assignee}*.\nO atendimento já está em andamento.`;
+      break;
+
+    case "AGUARDANDO_USUARIO":
+      statusHeader = `🟧 *OS #${protocol} - AGUARDANDO SUA RESPOSTA*`;
+      actionText = `Precisamos de informações adicionais para prosseguir com o atendimento:\n👉 *${waitingMessage}*`;
+      break;
+
+    case "AGUARDANDO_PECA":
+      statusHeader = `🟨 *OS #${protocol} - AGUARDANDO PEÇA / TERCEIROS*`;
+      actionText = `O atendimento aguarda chegada de componente ou liberação de fornecedor terceiro. Retomaremos assim que disponível.`;
+      break;
+
+    case "RESOLVIDO":
+      statusHeader = `✅ *OS #${protocol} RESOLVIDA*`;
+      actionText = `Solução aplicada: ${solution || "Atendimento concluído com sucesso."}\n\nCaso o problema persista, responda esta mensagem para reabrirmos a OS.`;
+      break;
+
+    case "FINALIZADO":
+      statusHeader = `🏁 *OS #${protocol} FINALIZADA*`;
+      actionText = `Atendimento encerrado. Agradecemos o contato com o AgroDesk TI!`;
+      break;
+
+    case "CANCELADO":
+      statusHeader = `❌ *OS #${protocol} CANCELADA*`;
+      actionText = note
+        ? `Motivo do cancelamento: ${note}`
+        : `Esta Ordem de Serviço foi cancelada. Entre em contato com a TI se necessitar de novo chamado.`;
+      break;
+
+    case "REABERTO":
+      statusHeader = `🔄 *OS #${protocol} REABERTA*`;
+      actionText = `Sua OS foi reaberta e voltou para a fila prioritária de atendimento da TI.`;
+      break;
+
+    default:
+      statusHeader = `📌 *ATUALIZAÇÃO DA OS #${protocol}*`;
+      actionText = `Status atual: ${status}`;
+      break;
   }
 
-  const lines = [
-    `Ola, ${requesterName}.`,
-    statusMessage,
-    `Status atual: ${status}.`,
-    `Setor: ${department} | Filial/local: ${branch}.`,
-    `Categoria: ${category}.`,
-    `Resumo do problema: ${summary}`,
-    `Proxima acao: ${nextStep}`,
+  const sections = [
+    `Olá, *${requesterName}*!`,
+    ``,
+    statusHeader,
+    ``,
+    `📋 *Assunto:* ${title}`,
+    `🏢 *Unidade/Setor:* ${branch} | ${department}`,
+    `🏷️ *Categoria:* ${category}`,
+    ``,
+    `ℹ️ *Atualização:*`,
+    actionText,
+    ``,
+    `— *AgroDesk TI* | Central de Suporte`,
   ];
 
-  return lines.filter((line) => collapseWhitespace(line).length > 0).join("\n");
+  return sections.join("\n");
 }

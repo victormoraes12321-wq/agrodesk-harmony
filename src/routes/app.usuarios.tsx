@@ -23,6 +23,7 @@ import { PageLoading } from "@/components/ui/page-loading";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { formatBranchName } from "@/lib/helpdesk";
+import { maskPhone } from "@/lib/format";
 import { useApp } from "@/lib/store";
 import { userSchema } from "@/lib/validation";
 import type { User } from "@/types";
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/app/usuarios")({
 type UserDraft = {
   id?: string;
   name: string;
+  username: string;
   email: string;
   phone: string;
   whatsapp: string;
@@ -52,6 +54,7 @@ type UserDraft = {
 function blankDraft(): UserDraft {
   return {
     name: "",
+    username: "",
     email: "",
     phone: "",
     whatsapp: "",
@@ -100,7 +103,8 @@ function UsersPage() {
         const textMatch =
           normalized.length === 0 ||
           user.name.toLowerCase().includes(normalized) ||
-          user.email.toLowerCase().includes(normalized) ||
+          (user.email ? user.email.toLowerCase().includes(normalized) : false) ||
+          (user.username ? user.username.toLowerCase().includes(normalized) : false) ||
           user.phone.toLowerCase().includes(normalized);
         const roleMatch = roleFilter === "ALL" || user.role === roleFilter;
         const activeMatch =
@@ -124,7 +128,8 @@ function UsersPage() {
     setDraft({
       id: user.id,
       name: user.name,
-      email: user.email,
+      username: user.username || user.name,
+      email: user.email ?? "",
       phone: user.phone,
       whatsapp: user.whatsapp ?? "",
       extension: user.extension ?? "",
@@ -143,6 +148,7 @@ function UsersPage() {
   const save = async () => {
     const validation = userSchema.safeParse({
       name: draft.name,
+      username: draft.username,
       email: draft.email,
       phone: draft.phone,
       departmentId: draft.departmentId,
@@ -162,7 +168,8 @@ function UsersPage() {
     const user: User = {
       id: draft.id ?? "",
       name: validation.data.name,
-      email: validation.data.email,
+      username: validation.data.username,
+      email: validation.data.email ? validation.data.email.trim() : "",
       phone: validation.data.phone,
       whatsapp: draft.whatsapp || undefined,
       extension: draft.extension || undefined,
@@ -419,24 +426,37 @@ function UsersPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1 sm:col-span-2">
-              <Label>Nome *</Label>
+              <Label>Nome completo *</Label>
               <Input
                 value={draft.name}
                 onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Ex: Carlos Eduardo de Oliveira"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Nome de usuário (para login) *</Label>
+              <Input
+                value={draft.username}
+                onChange={(event) => setDraft((prev) => ({ ...prev, username: event.target.value }))}
+                placeholder="Ex: carlos.oliveira"
               />
             </div>
             <div className="space-y-1">
-              <Label>E-mail *</Label>
+              <Label>E-mail (opcional)</Label>
               <Input
                 value={draft.email}
                 onChange={(event) => setDraft((prev) => ({ ...prev, email: event.target.value }))}
+                placeholder="carlos@empresa.com"
               />
             </div>
             <div className="space-y-1">
               <Label>Telefone *</Label>
               <Input
                 value={draft.phone}
-                onChange={(event) => setDraft((prev) => ({ ...prev, phone: event.target.value }))}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, phone: maskPhone(event.target.value) }))
+                }
+                placeholder="(00) 00000-0000"
               />
             </div>
             <div className="space-y-1">
@@ -444,8 +464,9 @@ function UsersPage() {
               <Input
                 value={draft.whatsapp}
                 onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, whatsapp: event.target.value }))
+                  setDraft((prev) => ({ ...prev, whatsapp: maskPhone(event.target.value) }))
                 }
+                placeholder="(00) 00000-0000"
               />
             </div>
             <div className="space-y-1">

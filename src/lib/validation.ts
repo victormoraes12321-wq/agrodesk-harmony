@@ -5,12 +5,32 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Informe sua senha."),
 });
 
+export const registerFormSchema = z
+  .object({
+    name: z.string().trim().min(3, "Informe seu nome completo."),
+    username: z.string().trim().min(3, "Informe um nome de usuário para login."),
+    email: z.string().trim().optional(),
+    password: z.string().min(8, "A senha deve ter no mínimo 8 caracteres."),
+    confirmPassword: z.string().min(8, "Confirme sua senha."),
+    departmentId: z.string().trim().min(1, "Selecione seu setor/departamento."),
+    branchId: z.string().trim().min(1, "Selecione sua filial/unidade."),
+    phone: z.string().trim().optional(),
+    whatsapp: z.string().trim().optional(),
+    extension: z.string().trim().optional(),
+    jobTitle: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem.",
+    path: ["confirmPassword"],
+  });
+
 export const profileSchema = z.object({
   name: z.string().trim().min(3, "Informe o nome completo."),
   phone: z.string().trim().min(6, "Informe um telefone valido."),
   whatsapp: z.string().trim().optional(),
   extension: z.string().trim().optional(),
-  email: z.string().trim().email("Informe um e-mail valido."),
+  email: z.string().trim().optional(),
   departmentId: z.string().trim().min(1, "Selecione o setor."),
   branchId: z.string().trim().min(1, "Selecione a filial/local."),
   jobTitle: z.string().trim().optional(),
@@ -23,12 +43,13 @@ export const newTicketSchema = z.object({
   departmentId: z.string().trim().min(1, "Setor obrigatorio."),
   branchId: z.string().trim().min(1, "Filial/local obrigatorio."),
   description: z.string().trim().min(10, "Descreva o problema com mais detalhes."),
-  requesterEmail: z.string().trim().email("E-mail invalido.").optional().or(z.literal("")),
+  requesterEmail: z.string().trim().optional(),
 });
 
 export const userSchema = z.object({
-  name: z.string().trim().min(3, "Nome obrigatorio."),
-  email: z.string().trim().email("E-mail invalido."),
+  name: z.string().trim().min(3, "Nome completo obrigatorio."),
+  username: z.string().trim().min(3, "Nome de usuário obrigatorio."),
+  email: z.string().trim().optional(),
   phone: z.string().trim().min(6, "Telefone obrigatorio."),
   departmentId: z.string().trim().min(1, "Setor obrigatorio."),
   branchId: z.string().trim().min(1, "Filial/local obrigatorio."),

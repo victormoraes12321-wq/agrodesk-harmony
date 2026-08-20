@@ -2,12 +2,40 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, Search, Filter, ShieldAlert, Calendar, ArrowRightLeft, Wrench } from 'lucide-react';
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Filter,
+  ShieldAlert,
+  Calendar,
+  ArrowRightLeft,
+  Wrench,
+  FileSpreadsheet,
+  QrCode,
+  Network,
+  Printer,
+  CheckSquare,
+  Square,
+} from 'lucide-react';
 
-import { getAssets, getAsset, createAsset, updateAsset, deleteAsset, getAssetTypes, getSuppliers, type Asset } from '@/services/patrimonio-api';
+import {
+  getAssets,
+  getAsset,
+  createAsset,
+  updateAsset,
+  deleteAsset,
+  getAssetTypes,
+  getSuppliers,
+  type Asset,
+} from '@/services/patrimonio-api';
 import { useApp } from '@/lib/store';
 import { formatBranchName } from '@/lib/helpdesk';
 import { cn } from '@/lib/utils';
+import { AssetLabelModal } from '@/components/patrimonio/AssetLabelModal';
+import { AssetTopologyModal } from '@/components/patrimonio/AssetTopologyModal';
+import { AssetImportModal } from '@/components/patrimonio/AssetImportModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -90,6 +118,14 @@ function AtivosPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // New Interactive Modals state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [labelModalOpen, setLabelModalOpen] = useState(false);
+  const [labelTargetAssets, setLabelTargetAssets] = useState<Asset[]>([]);
+  const [topologyOpen, setTopologyOpen] = useState(false);
+  const [topologyAsset, setTopologyAsset] = useState<Asset | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Detail Drawer state & queries
   const [detailAssetId, setDetailAssetId] = useState<string | null>(null);
@@ -256,8 +292,8 @@ function AtivosPage() {
         departmentId: draft.departmentId || undefined,
         branchId: draft.branchId || undefined,
         userId: draft.userId || undefined,
-        hostname: draft.hostname || null,
-        parentId: draft.parentId || null,
+        hostname: draft.hostname || undefined,
+        parentId: draft.parentId || undefined,
       };
 
       if (draft.id) {
@@ -293,6 +329,100 @@ function AtivosPage() {
     }
   };
 
+  const handleImportAssets = async (rows: any[]) => {
+    const pcType =
+      assetTypes?.find(
+        (t) =>
+          t.name.toLowerCase().includes('computador') ||
+          t.name.toLowerCase().includes('desktop') ||
+          t.name.toLowerCase().includes('micro'),
+      ) || assetTypes?.[0];
+    const monType =
+      assetTypes?.find((t) => t.name.toLowerCase().includes('monitor')) || assetTypes?.[0];
+    const kbType =
+      assetTypes?.find((t) => t.name.toLowerCase().includes('teclado')) || assetTypes?.[0];
+    const mouseType =
+      assetTypes?.find((t) => t.name.toLowerCase().includes('mouse')) || assetTypes?.[0];
+    const nbkType =
+      assetTypes?.find((t) => t.name.toLowerCase().includes('nobreak')) || assetTypes?.[0];
+
+    for (const row of rows) {
+      const created = await createAsset({
+        code: row.code,
+        name: row.name,
+        hostname: row.hostname,
+        brand: row.brand,
+        model: row.model,
+        processor: row.processor,
+        ram: row.ram,
+        disk: row.disk,
+        status: 'EM_USO',
+        assetTypeId: pcType?.id || '',
+        departmentId: row.departmentId,
+        branchId: row.branchId,
+      });
+
+      if (row.monitors && row.monitors !== 'N/D') {
+        const list = row.monitors.split(';').map((s: string) => s.trim()).filter(Boolean);
+        for (let i = 0; i < list.length; i++) {
+          await createAsset({
+            code: `${row.code}-MON${i + 1}`,
+            name: `Monitor ${list[i]}`,
+            brand: list[i].split(' ')[0] || 'Dell',
+            model: list[i],
+            status: 'EM_USO',
+            parentId: created.id,
+            assetTypeId: monType?.id || '',
+            departmentId: row.departmentId,
+            branchId: row.branchId,
+          });
+        }
+      }
+
+      if (row.keyboard && row.keyboard !== 'N/D') {
+        await createAsset({
+          code: `${row.code}-KB`,
+          name: `Teclado ${row.keyboard}`,
+          model: row.keyboard,
+          status: 'EM_USO',
+          parentId: created.id,
+          assetTypeId: kbType?.id || '',
+          departmentId: row.departmentId,
+          branchId: row.branchId,
+        });
+      }
+
+      if (row.mouse && row.mouse !== 'N/D') {
+        await createAsset({
+          code: `${row.code}-MS`,
+          name: `Mouse ${row.mouse}`,
+          model: row.mouse,
+          status: 'EM_USO',
+          parentId: created.id,
+          assetTypeId: mouseType?.id || '',
+          departmentId: row.departmentId,
+          branchId: row.branchId,
+        });
+      }
+
+      if (row.nobreak && row.nobreak !== 'N/D') {
+        await createAsset({
+          code: `${row.code}-NBK`,
+          name: `Nobreak ${row.nobreak}`,
+          model: row.nobreak,
+          status: 'EM_USO',
+          parentId: created.id,
+          assetTypeId: nbkType?.id || '',
+          departmentId: row.departmentId,
+          branchId: row.branchId,
+        });
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['assets'] });
+    queryClient.invalidateQueries({ queryKey: ['asset-dashboard'] });
+  };
+
   if (isLoading) {
     return <div className="p-6 text-center text-muted-foreground">Carregando ativos patrimoniais...</div>;
   }
@@ -303,9 +433,37 @@ function AtivosPage() {
         title="Ativos Patrimoniais"
         description="Consulte e gerencie todos os equipamentos de TI, mobiliários e recursos operacionais."
         actions={
-          <Button onClick={handleCreate} className="flex gap-2">
-            <Plus className="size-4" /> Novo Ativo
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setImportModalOpen(true)}
+              className="gap-1.5 text-xs h-9 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 shadow-sm"
+            >
+              <FileSpreadsheet className="size-4 text-emerald-600" />
+              Importar Planilha
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const targets =
+                  selectedIds.length > 0
+                    ? (assets || []).filter((a) => selectedIds.includes(a.id))
+                    : filteredAssets;
+                setLabelTargetAssets(targets);
+                setLabelModalOpen(true);
+              }}
+              className="gap-1.5 text-xs h-9 shadow-sm"
+            >
+              <QrCode className="size-4 text-primary" />
+              Etiquetas QR{" "}
+              {selectedIds.length > 0
+                ? `(${selectedIds.length})`
+                : `(${filteredAssets.length})`}
+            </Button>
+            <Button onClick={handleCreate} className="gap-1.5 text-xs h-9 shadow-sm">
+              <Plus className="size-4" /> Novo Ativo
+            </Button>
+          </div>
         }
       />
 
@@ -376,95 +534,185 @@ function AtivosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-6 py-4">Código</TableHead>
-                    <TableHead className="px-6 py-4">Nome</TableHead>
-                    <TableHead className="px-6 py-4">Tipo</TableHead>
-                    <TableHead className="px-6 py-4">Status</TableHead>
-                    <TableHead className="px-6 py-4">Localização</TableHead>
-                    <TableHead className="px-6 py-4">Responsável</TableHead>
-                    <TableHead className="px-6 py-4 text-right">Ações</TableHead>
+                    <TableHead className="w-10 px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredAssets.length > 0 &&
+                          selectedIds.length === filteredAssets.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(filteredAssets.map((a) => a.id));
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                        className="rounded border-input text-primary focus:ring-primary size-4 cursor-pointer"
+                      />
+                    </TableHead>
+                    <TableHead className="px-4 py-4">Código</TableHead>
+                    <TableHead className="px-4 py-4">Nome</TableHead>
+                    <TableHead className="px-4 py-4">Tipo</TableHead>
+                    <TableHead className="px-4 py-4">Status</TableHead>
+                    <TableHead className="px-4 py-4">Localização</TableHead>
+                    <TableHead className="px-4 py-4">Responsável</TableHead>
+                    <TableHead className="px-4 py-4 text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAssets.map((asset) => (
-                    <TableRow
-                      key={asset.id}
-                      className="hover:bg-muted/10 cursor-pointer transition-colors"
-                      onClick={() => {
-                        setDetailAssetId(asset.id);
-                        setActiveTab('geral');
-                      }}
-                    >
-                      <TableCell className="px-6 py-4 font-mono font-bold text-xs text-primary">{asset.code}</TableCell>
-                      <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{asset.name}</span>
-                          {asset.hostname && (
-                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] font-mono font-semibold px-1.5 py-0.5">
-                              ID: {asset.hostname}
-                            </Badge>
-                          )}
-                        </div>
-                        {asset.serialNumber && (
-                          <div className="text-[10px] text-muted-foreground font-mono">S/N: {asset.serialNumber}</div>
+                  {filteredAssets.map((asset) => {
+                    const isSelected = selectedIds.includes(asset.id);
+                    return (
+                      <TableRow
+                        key={asset.id}
+                        className={cn(
+                          "hover:bg-muted/10 cursor-pointer transition-colors",
+                          isSelected && "bg-primary/5",
                         )}
-                        {asset.parent && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            Vinculado a: <span className="font-semibold font-mono text-[11px] text-primary">{asset.parent.code}</span> ({asset.parent.name})
-                          </div>
-                        )}
-                        {asset.components && asset.components.length > 0 && (
-                          <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1">
-                            <span className="font-semibold">Componentes:</span>
-                            {asset.components.map((comp) => (
-                              <Badge key={comp.id} variant="outline" className="text-[9px] font-mono px-1 py-0 border-muted-foreground/30">
-                                {comp.code} ({comp.name})
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="px-6 py-4 text-sm">{asset.assetType?.name}</TableCell>
-                      <TableCell className="px-6 py-4">
-                        <Badge variant={statusBadgeVariant(asset.status)}>
-                          {statusLabel[asset.status] || asset.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-6 py-4 text-xs space-y-0.5">
-                        {asset.branch && <div>{formatBranchName(asset.branch.name)}</div>}
-                        {asset.department && <div className="text-muted-foreground">{asset.department.name}</div>}
-                        {!asset.branch && !asset.department && <span className="text-muted-foreground">-</span>}
-                      </TableCell>
-                      <TableCell className="px-6 py-4 text-sm">{asset.user?.name || '-'}</TableCell>
-                      <TableCell className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(asset);
+                        onClick={() => {
+                          setDetailAssetId(asset.id);
+                          setActiveTab("geral");
+                        }}
+                      >
+                        <TableCell
+                          className="w-10 px-4 py-4 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds((prev) => [...prev, asset.id]);
+                              } else {
+                                setSelectedIds((prev) => prev.filter((id) => id !== asset.id));
+                              }
                             }}
-                          >
-                            <Edit2 className="size-3.5" />
-                          </Button>
-                          {asset.status !== 'BAIXADO' && (
+                            className="rounded border-input text-primary focus:ring-primary size-4 cursor-pointer"
+                          />
+                        </TableCell>
+                        <TableCell className="px-4 py-4 font-mono font-bold text-xs text-primary">
+                          {asset.code}
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{asset.name}</span>
+                            {asset.hostname && (
+                              <Badge
+                                variant="outline"
+                                className="bg-primary/5 text-primary border-primary/20 text-[10px] font-mono font-semibold px-1.5 py-0.5"
+                              >
+                                ID: {asset.hostname}
+                              </Badge>
+                            )}
+                          </div>
+                          {asset.serialNumber && (
+                            <div className="text-[10px] text-muted-foreground font-mono">
+                              S/N: {asset.serialNumber}
+                            </div>
+                          )}
+                          {asset.parent && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              Vinculado a:{" "}
+                              <span className="font-semibold font-mono text-[11px] text-primary">
+                                {asset.parent.code}
+                              </span>{" "}
+                              ({asset.parent.name})
+                            </div>
+                          )}
+                          {asset.components && asset.components.length > 0 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1">
+                              <span className="font-semibold">Componentes:</span>
+                              {asset.components.map((comp) => (
+                                <Badge
+                                  key={comp.id}
+                                  variant="outline"
+                                  className="text-[9px] font-mono px-1 py-0 border-muted-foreground/30"
+                                >
+                                  {comp.code} ({comp.name})
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-sm">{asset.assetType?.name}</TableCell>
+                        <TableCell className="px-4 py-4">
+                          <Badge variant={statusBadgeVariant(asset.status)}>
+                            {statusLabel[asset.status] || asset.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-xs space-y-0.5">
+                          {asset.branch && <div>{formatBranchName(asset.branch.name)}</div>}
+                          {asset.department && (
+                            <div className="text-muted-foreground">{asset.department.name}</div>
+                          )}
+                          {!asset.branch && !asset.department && (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-sm">
+                          {asset.user?.name || "-"}
+                        </TableCell>
+                        <TableCell className="px-4 py-4 text-right">
+                          <div className="flex justify-end gap-1.5">
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-destructive hover:bg-destructive/10"
+                              title="Ver Topologia e Periféricos"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteTarget(asset);
+                                setTopologyAsset(asset);
+                                setTopologyOpen(true);
                               }}
+                              className="size-8 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
                             >
-                              <Trash2 className="size-3.5" />
+                              <Network className="size-3.5" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Imprimir Etiqueta com QR Code"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLabelTargetAssets([asset]);
+                                setLabelModalOpen(true);
+                              }}
+                              className="size-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                            >
+                              <QrCode className="size-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Editar Ativo"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(asset);
+                              }}
+                              className="size-8 p-0"
+                            >
+                              <Edit2 className="size-3.5" />
+                            </Button>
+                            {asset.status !== "BAIXADO" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                title="Baixar Ativo"
+                                className="size-8 p-0 text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(asset);
+                                }}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -898,6 +1146,36 @@ function AtivosPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* New Interactive Modals */}
+      <AssetImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        departments={departments}
+        branches={branches}
+        onImportAssets={handleImportAssets}
+      />
+
+      <AssetLabelModal
+        open={labelModalOpen}
+        onOpenChange={setLabelModalOpen}
+        assets={labelTargetAssets}
+        branches={branches}
+        departments={departments}
+      />
+
+      <AssetTopologyModal
+        open={topologyOpen}
+        onOpenChange={setTopologyOpen}
+        asset={topologyAsset}
+        allAssets={assets || []}
+        departments={departments}
+        branches={branches}
+        onOpenLabels={(a) => {
+          setLabelTargetAssets([a]);
+          setLabelModalOpen(true);
+        }}
+      />
     </div>
   );
 }

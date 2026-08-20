@@ -2,11 +2,17 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowRight,
+  BookOpen,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
+  HelpCircle,
   Inbox,
+  Lightbulb,
   PlusCircle,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -240,6 +246,167 @@ function PortalPage() {
           )}
         </div>
       </section>
+
+      {/* Base de Conhecimento e Autoatendimento (FAQ) */}
+      <PortalFaqSection onOpenTicket={(category) => navigate({ to: "/app/nova-os" })} />
     </div>
+  );
+}
+
+const FAQ_ITEMS = [
+  {
+    id: "impressora",
+    question: "Como configurar ou selecionar minha impressora padrão no Windows?",
+    category: "Impressoras",
+    answer:
+      "1. No teclado, pressione a tecla Windows e digite 'Impressoras e Scanners'.\n2. Localize a impressora da sua sala/setor (ex: HP LaserJet Matriz ou EPSON).\n3. Clique sobre ela e selecione 'Definir como padrão'.\n4. Se a impressora não aparecer, verifique se o cabo de rede ou USB está conectado.",
+  },
+  {
+    id: "senha",
+    question: "Esqueci minha senha de login do computador ou e-mail. Como redefinir?",
+    category: "Acesso e Contas",
+    answer:
+      "Na tela inicial de login do AgroDesk TI, clique no botão 'Esqueci minha senha' e informe seu nome de usuário. O sistema abrirá automaticamente uma OS de prioridade alta para a equipe de TI resetar sua senha com segurança.",
+  },
+  {
+    id: "internet",
+    question: "Meu computador perdeu a conexão com a internet ou rede da fazenda/filial.",
+    category: "Rede e Internet",
+    answer:
+      "1. Verifique se o cabo azul de rede atrás do computador está com a luz piscando (verde/amarela).\n2. Reinicie o computador.\n3. Se outras pessoas do mesmo setor também estiverem sem sinal, pode ser instabilidade no roteador/switch principal da unidade.",
+  },
+  {
+    id: "computador",
+    question: "O computador não liga ou a tela fica toda preta com luz piscando.",
+    category: "Computadores",
+    answer:
+      "1. Cheque se o cabo de energia e o botão do filtro de linha / nobreak estão ligados.\n2. Verifique se o cabo HDMI/VGA atrás do monitor não está solto.\n3. Mantenha o botão power pressionado por 10 segundos para forçar o desligamento completo e ligue novamente.",
+  },
+  {
+    id: "email",
+    question: "Como solicitar novo e-mail corporativo ou acesso a pastas compartilhadas?",
+    category: "Acessos e Permissões",
+    answer:
+      "Abra um chamado pela opção 'Nova OS' escolhendo a categoria 'Acesso / E-mail'. Informe o nome completo do novo colaborador, cargo, setor e as pastas que ele precisará acessar.",
+  },
+];
+
+function PortalFaqSection({ onOpenTicket }: { onOpenTicket: (category?: string) => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [faqSearch, setFaqSearch] = useState("");
+
+  const filteredFaq = useMemo(() => {
+    const term = faqSearch.toLowerCase().trim();
+    if (!term) return FAQ_ITEMS;
+    return FAQ_ITEMS.filter(
+      (item) =>
+        item.question.toLowerCase().includes(term) ||
+        item.answer.toLowerCase().includes(term) ||
+        item.category.toLowerCase().includes(term),
+    );
+  }, [faqSearch]);
+
+  const toggleFaq = (id: string) => {
+    setOpenId((prev) => (prev === id ? null : id));
+  };
+
+  return (
+    <section className="rounded-3xl border bg-card p-6 lg:p-8 shadow-[var(--shadow-card)] space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+        <div className="flex items-center gap-3">
+          <div className="size-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            <BookOpen className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              Base de Conhecimento & Autoatendimento
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                Soluções Rápidas
+              </span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Consulte guias práticos para resolver dúvidas comuns antes de abrir um chamado.
+            </p>
+          </div>
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            value={faqSearch}
+            onChange={(e) => setFaqSearch(e.target.value)}
+            placeholder="Buscar dúvida ou tutorial..."
+            className="pl-9 text-xs h-9"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {filteredFaq.length === 0 ? (
+          <div className="p-6 text-center text-muted-foreground text-xs">
+            Nenhum tutorial encontrado para "{faqSearch}".{" "}
+            <button
+              onClick={() => onOpenTicket()}
+              className="text-primary font-semibold underline ml-1"
+            >
+              Abrir um chamado com a TI
+            </button>
+          </div>
+        ) : (
+          filteredFaq.map((faq) => {
+            const isOpen = openId === faq.id;
+            return (
+              <div
+                key={faq.id}
+                className={`rounded-2xl border transition-all overflow-hidden ${
+                  isOpen ? "bg-muted/15 border-primary/30 shadow-sm" : "bg-card hover:bg-muted/10"
+                }`}
+              >
+                <div
+                  onClick={() => toggleFaq(faq.id)}
+                  className="p-4 flex items-center justify-between gap-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <HelpCircle className="size-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground leading-tight">
+                        {faq.question}
+                      </h4>
+                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                        {faq.category}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-muted-foreground">
+                    {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  </div>
+                </div>
+
+                {isOpen && (
+                  <div className="px-5 pb-5 pt-1 text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap border-t border-border/40 space-y-3 animate-in fade-in-50 duration-200">
+                    <div className="p-3 bg-background rounded-xl border border-border/80">
+                      {faq.answer}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Não conseguiu resolver com este guia?</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onOpenTicket(faq.category)}
+                        className="text-xs h-7 text-primary border-primary/30 hover:bg-primary/5"
+                      >
+                        Abrir Chamado para {faq.category}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }

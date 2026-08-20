@@ -315,7 +315,7 @@ function DashboardPage() {
     };
     void navigate({
       to: "/app/chamados",
-      search: toTicketListUrlSearch(next),
+      search: toTicketListUrlSearch(next) as any,
     });
   };
 

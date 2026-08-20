@@ -56,7 +56,8 @@ import type { Ticket } from "@/types";
 
 export const Route = createFileRoute("/app/chamados")({
   head: () => ({ meta: [{ title: "Gestao de Chamados | AgroDesk TI" }] }),
-  validateSearch: (search: Record<string, unknown>) => parseTicketListSearch(search),
+  validateSearch: (search: Record<string, unknown>): Partial<TicketListSearch> =>
+    parseTicketListSearch(search),
   component: TicketsManagementRoute,
 });
 
@@ -146,7 +147,14 @@ function TicketsManagementPage() {
   } = useApp();
   const loading = usePageLoading();
   const wideTicketTable = useMediaQuery("(min-width: 1536px)");
-  const search = Route.useSearch();
+  const rawSearch = Route.useSearch();
+  const search = useMemo<TicketListSearch>(
+    () => ({
+      ...getDefaultTicketListSearch(),
+      ...rawSearch,
+    }),
+    [rawSearch],
+  );
   const navigate = useNavigate();
   const admins = users.filter(
     (user) => user.role === "TI_ADMIN" && user.active && user.canReceiveTickets,
@@ -168,7 +176,7 @@ function TicketsManagementPage() {
       });
 
       void navigate({
-        search: toTicketListUrlSearch(next),
+        search: toTicketListUrlSearch(next) as any,
         replace,
       });
     },
@@ -178,7 +186,7 @@ function TicketsManagementPage() {
   const clearFilters = useCallback(() => {
     const base = getDefaultTicketListSearch();
     void navigate({
-      search: toTicketListUrlSearch(base),
+      search: toTicketListUrlSearch(base) as any,
       replace: true,
     });
   }, [navigate]);
@@ -623,6 +631,8 @@ function TicketsManagementPage() {
                           createdAt={ticket.createdAt}
                           slaHours={ticket.slaHours}
                           closedAt={ticket.closedAt}
+                          status={ticket.status}
+                          slaDueAt={ticket.slaDueAt}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2 pt-1">
@@ -794,6 +804,8 @@ function TicketsManagementPage() {
                               createdAt={ticket.createdAt}
                               slaHours={ticket.slaHours}
                               closedAt={ticket.closedAt}
+                              status={ticket.status}
+                              slaDueAt={ticket.slaDueAt}
                             />
                           </td>
                           <td className="px-3 py-3">

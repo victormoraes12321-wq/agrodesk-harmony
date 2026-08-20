@@ -127,6 +127,8 @@ function MyTicketsPage() {
                       createdAt={ticket.createdAt}
                       slaHours={ticket.slaHours}
                       closedAt={ticket.closedAt}
+                      status={ticket.status}
+                      slaDueAt={ticket.slaDueAt}
                     />
                     <Button size="sm" variant="outline" asChild>
                       <Link to="/app/chamados/$id" params={{ id: ticket.id }}>
@@ -168,6 +170,8 @@ function MyTicketsPage() {
                           createdAt={ticket.createdAt}
                           slaHours={ticket.slaHours}
                           closedAt={ticket.closedAt}
+                          status={ticket.status}
+                          slaDueAt={ticket.slaDueAt}
                         />
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">

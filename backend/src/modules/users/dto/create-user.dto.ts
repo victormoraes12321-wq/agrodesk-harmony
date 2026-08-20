@@ -1,8 +1,7 @@
-﻿import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import {
   IsBoolean,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -13,12 +12,18 @@ import {
 export class CreateUserDto {
   @ApiProperty()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "O nome completo é obrigatório" })
   name!: string;
 
   @ApiProperty()
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @IsNotEmpty({ message: "O nome de usuário é obrigatório" })
+  username!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  email?: string;
 
   @ApiProperty({ minLength: 8 })
   @IsString()

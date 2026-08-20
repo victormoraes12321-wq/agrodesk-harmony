@@ -15,9 +15,9 @@ import {
 async function loginAs(email) {
   const result = await requestApi("/auth/login", {
     method: "POST",
-    body: { email, password: DEFAULT_PASSWORD },
+    body: { username: email, password: DEFAULT_PASSWORD },
   });
-  assertCondition(result.ok, `Falha de login para ${email}: ${result.status}`);
+  assertCondition(result.ok, `Falha de login para ${email}: ${result.status} ${JSON.stringify(result.data)}`);
   return result.data;
 }
 

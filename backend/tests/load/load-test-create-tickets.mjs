@@ -48,7 +48,7 @@ async function main() {
     const user = requesterUsers[index];
     const result = await requestApi("/auth/login", {
       method: "POST",
-      body: { email: user.email, password: DEFAULT_PASSWORD },
+      body: { username: user.email, password: DEFAULT_PASSWORD },
     });
     addMetricResult(loginMetrics, result, { email: user.email });
     return result;

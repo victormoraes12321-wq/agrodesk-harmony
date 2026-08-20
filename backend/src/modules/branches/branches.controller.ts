@@ -1,7 +1,8 @@
-﻿import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { Public } from "../../common/decorators/public.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { BranchesService } from "./branches.service";
@@ -21,6 +22,7 @@ export class BranchesController {
     return this.branchesService.create(user, dto);
   }
 
+  @Public()
   @Get()
   @ApiOperation({ summary: "Listar filiais/locais" })
   findAll() {

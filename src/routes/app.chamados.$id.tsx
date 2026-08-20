@@ -1,22 +1,49 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import {
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
   CheckCircle2,
-  CircleDashed,
-  ClipboardList,
+  ChevronRight,
+  Clock,
+  Clock3,
+  Copy,
+  Download,
+  Edit3,
+  ExternalLink,
+  FileArchive,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
   FileText,
+  History,
+  Laptop,
+  MapPin,
   MessageCircle,
+  MessageSquare,
   MessageSquareText,
   Package,
   Paperclip,
+  PenTool,
+  Phone,
+  Plus,
+  RefreshCw,
   Send,
   Shield,
-  Star,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+  User,
+  UserCheck,
   UserCircle2,
   Wrench,
+  XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAsset, updateAsset, getAssets, type Asset } from "@/services/patrimonio-api";
+import { downloadAttachmentFile } from "@/services/helpdesk-api";
 import { toast } from "sonner";
 
 import { PRIORITY_LEVELS, STATUS_FLOW } from "@/app/constants";
@@ -31,6 +58,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -44,11 +72,13 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/ui/page-header";
 import { PageLoading } from "@/components/ui/page-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppMessagePanel } from "@/components/tickets/WhatsAppMessagePanel";
 import { TicketSlaChip } from "@/features/tickets/TicketSlaChip";
+import { TechnicalChecklist } from "@/components/tickets/TechnicalChecklist";
+import { TicketSlaTimeline } from "@/components/tickets/TicketSlaTimeline";
+import { DigitalSignatureModal } from "@/components/tickets/DigitalSignatureModal";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { formatDateTime, priorityLabel, statusLabel } from "@/lib/format";
 import {
@@ -64,8 +94,37 @@ import { commentSchema, ratingSchema } from "@/lib/validation";
 import { cn } from "@/lib/utils";
 import type { Ticket } from "@/types";
 
+function formatBytes(bytes: number) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getFileIcon(fileName: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg", "heic"].includes(ext)) {
+    return <FileImage className="size-4 text-blue-500 shrink-0" />;
+  }
+  if (["pdf"].includes(ext)) {
+    return <FileText className="size-4 text-rose-500 shrink-0" />;
+  }
+  if (["xls", "xlsx", "csv", "ods", "ofx", "qif", "rem", "ret"].includes(ext)) {
+    return <FileSpreadsheet className="size-4 text-emerald-500 shrink-0" />;
+  }
+  if (["xml", "json", "sql", "log", "txt", "html", "css", "ts", "js", "yaml", "yml"].includes(ext)) {
+    return <FileCode className="size-4 text-amber-500 shrink-0" />;
+  }
+  if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(ext)) {
+    return <FileArchive className="size-4 text-purple-500 shrink-0" />;
+  }
+  return <Paperclip className="size-4 text-primary shrink-0" />;
+}
+
 export const Route = createFileRoute("/app/chamados/$id")({
-  head: () => ({ meta: [{ title: "Detalhe da OS | AgroDesk TI" }] }),
+  validateSearch: () => ({}),
+  head: () => ({ meta: [{ title: "Gerenciador de OS | AgroDesk TI" }] }),
   component: TicketDetailRoute,
 });
 
@@ -101,7 +160,7 @@ function TicketDetailRoute() {
         <Card className="max-w-md w-full text-center shadow-[var(--shadow-card)]">
           <CardHeader>
             <CardTitle>Acesso negado</CardTitle>
-            <CardDescription>Voce nao tem permissao para visualizar esta OS.</CardDescription>
+            <CardDescription>Você não tem permissão para visualizar esta OS.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
@@ -120,12 +179,19 @@ function TicketDetailRoute() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Visão do Solicitante
+// ─────────────────────────────────────────────────────────────────────────────
 function RequesterTicketView({ ticket }: { ticket: Ticket }) {
   const { departments, branches, categories, addComment, rateTicket, uploadAttachment } = useApp();
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(ticket.rating ?? 0);
   const [ratingComment, setRatingComment] = useState(ticket.ratingComment ?? "");
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const publicComments = ticket.comments.filter((entry) => !entry.internal);
   const canRate = ticket.status === "FINALIZADO";
 
@@ -134,245 +200,439 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
     setRatingComment(ticket.ratingComment ?? "");
   }, [ticket.id, ticket.rating, ticket.ratingComment]);
 
+  const handleAppendFiles = (newFilesList: FileList | File[] | null) => {
+    if (!newFilesList || newFilesList.length === 0) return;
+    const incoming = Array.from(newFilesList);
+
+    setAttachmentFiles((prev) => {
+      const existingKeySet = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const nonDuplicates: File[] = [];
+      let duplicateCount = 0;
+
+      for (const f of incoming) {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (!existingKeySet.has(key)) {
+          existingKeySet.add(key);
+          nonDuplicates.push(f);
+        } else {
+          duplicateCount++;
+        }
+      }
+
+      if (duplicateCount > 0) {
+        toast.info(`${duplicateCount} arquivo(s) duplicados foram ignorados.`);
+      }
+      if (nonDuplicates.length > 0) {
+        toast.success(`${nonDuplicates.length} arquivo(s) selecionado(s).`);
+      }
+
+      return [...prev, ...nonDuplicates];
+    });
+  };
+
+  const handleRemoveFile = (indexToRemove: number) => {
+    setAttachmentFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const sendComment = async () => {
     const validation = commentSchema.safeParse({ content: comment });
     if (!validation.success) {
-      toast.error(validation.error.issues[0]?.message ?? "Comentario invalido.");
+      toast.error(validation.error.issues[0]?.message ?? "Comentário inválido.");
       return;
     }
 
     try {
       await addComment(ticket.id, validation.data.content, false);
       setComment("");
-      toast.success("Comentario enviado.");
+      toast.success("Mensagem enviada para a equipe de TI.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel enviar comentario.";
+        error instanceof Error ? error.message : "Não foi possível enviar comentário.";
       toast.error(message);
     }
   };
 
   const submitRating = async () => {
     if (!canRate) {
-      toast.error("A avaliacao fica disponivel quando a OS estiver finalizada.");
+      toast.error("A avaliação fica disponível quando a OS estiver finalizada.");
       return;
     }
 
     const validation = ratingSchema.safeParse({ rating });
     if (!validation.success) {
-      toast.error(validation.error.issues[0]?.message ?? "Selecione uma nota.");
+      toast.error(validation.error.issues[0]?.message ?? "Selecione uma nota de 1 a 5.");
       return;
     }
     try {
       await rateTicket(ticket.id, validation.data.rating, ratingComment);
-      toast.success("Avaliacao registrada.");
+      toast.success("Avaliação registrada com sucesso!");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel registrar avaliacao.";
+        error instanceof Error ? error.message : "Não foi possível registrar avaliação.";
       toast.error(message);
     }
   };
 
-  const submitAttachment = async () => {
-    if (!attachmentFile) {
-      toast.error("Selecione um arquivo para anexar.");
+  const submitAttachments = async () => {
+    if (attachmentFiles.length === 0) {
+      toast.error("Selecione pelo menos um arquivo para anexar.");
       return;
     }
+    setIsUploadingAttachments(true);
+    let successCount = 0;
     try {
-      await uploadAttachment(ticket.id, attachmentFile, false);
-      setAttachmentFile(null);
-      toast.success("Anexo enviado com sucesso.");
+      for (const file of attachmentFiles) {
+        await uploadAttachment(ticket.id, file, false);
+        successCount++;
+      }
+      setAttachmentFiles([]);
+      toast.success(`${successCount} anexo(s) enviado(s) com sucesso.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Nao foi possivel enviar anexo.";
+      const message = error instanceof Error ? error.message : "Não foi possível enviar anexo.";
       toast.error(message);
+    } finally {
+      setIsUploadingAttachments(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Detalhe da OS ${ticket.protocol}`}
-        description="Visao do solicitante com acompanhamento simples, comentarios publicos e anexos."
-      />
+    <div className="space-y-6 max-w-5xl mx-auto pb-12 fade-slide-up">
+      {/* Top Header */}
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          to="/app/meus-chamados"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors"
+        >
+          <ArrowLeft className="size-4" /> Voltar aos meus chamados
+        </Link>
+        <span className="font-mono text-xs text-muted-foreground">ID: {ticket.id}</span>
+      </div>
 
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card className="xl:col-span-2 shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <CardTitle>{ticket.title}</CardTitle>
-              <StatusBadge status={ticket.status} />
-            </div>
-            <CardDescription>Protocolo {ticket.protocol}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <FieldInfo label="Protocolo" value={ticket.protocol} />
-              <FieldInfo label="Status" value={statusLabel[ticket.status]} />
-              <FieldInfo label="Data de abertura" value={formatDateTime(ticket.createdAt)} />
-              <FieldInfo
-                label="Setor"
-                value={getDepartmentName(departments, ticket.departmentId)}
-              />
-              <FieldInfo label="Filial/local" value={getBranchName(branches, ticket.branchId)} />
-              {ticket.categoryId ? (
-                <FieldInfo
-                  label="Categoria"
-                  value={getCategoryName(categories, ticket.categoryId)}
-                />
-              ) : null}
-            </div>
-
-            <section className="rounded-xl border bg-muted/20 p-4">
-              <h3 className="font-medium mb-2">Descricao do problema</h3>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {ticket.description}
+      {/* Hero Card */}
+      <Card className="border shadow-[var(--shadow-card)] overflow-hidden bg-card">
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 border-b">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs font-bold bg-primary text-primary-foreground px-2.5 py-1 rounded-md shadow-sm">
+                  {ticket.protocol}
+                </span>
+                <StatusBadge status={ticket.status} />
+                <PriorityBadge priority={ticket.priority} />
+                {ticket.categoryId && (
+                  <Badge variant="outline" className="bg-background/80">
+                    {getCategoryName(categories, ticket.categoryId)}
+                  </Badge>
+                )}
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight mt-3 text-foreground">
+                {ticket.title || "Ordem de Serviço"}
+              </h1>
+              <p className="text-xs text-muted-foreground mt-1">
+                Aberta em {formatDateTime(ticket.createdAt)} por {ticket.requesterName}
               </p>
-            </section>
+            </div>
 
-            {ticket.status === "AGUARDANDO_USUARIO" && ticket.waitingRequesterMessage && (
-              <section className="rounded-xl border border-warning/35 bg-warning/10 p-4">
-                <h3 className="font-medium">O que a T.I. esta aguardando de voce</h3>
-                <p className="text-sm mt-2 whitespace-pre-wrap">{ticket.waitingRequesterMessage}</p>
-              </section>
-            )}
+            <div className="bg-background/90 backdrop-blur rounded-2xl p-4 border shadow-sm flex flex-col items-end shrink-0">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                Previsão de Atendimento
+              </span>
+              <TicketSlaChip
+                createdAt={ticket.createdAt}
+                slaHours={ticket.slaHours}
+                closedAt={ticket.closedAt}
+                status={ticket.status}
+                slaDueAt={ticket.slaDueAt}
+                showDetailed={true}
+              />
+            </div>
+          </div>
+        </div>
 
-            {ticket.solution && (
-              <section className="rounded-xl border border-success/30 bg-success/5 p-4">
-                <h3 className="font-medium text-success">Resposta/solucao</h3>
-                <p className="text-sm mt-2 whitespace-pre-wrap">{ticket.solution}</p>
-              </section>
-            )}
+        <CardContent className="p-6 space-y-6">
+          {/* Alerta de Aguardando Usuário */}
+          {ticket.status === "AGUARDANDO_USUARIO" && ticket.waitingRequesterMessage && (
+            <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-5 animate-pulse-soft">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold text-sm">
+                <AlertCircle className="size-5" /> A equipe de TI está aguardando seu retorno:
+              </div>
+              <p className="text-sm mt-2 text-foreground font-medium whitespace-pre-wrap leading-relaxed">
+                {ticket.waitingRequesterMessage}
+              </p>
+            </div>
+          )}
 
-            <section>
-              <h3 className="font-medium mb-2">Anexos</h3>
-              {ticket.attachments.length === 0 ? (
-                <EmptyState
-                  compact
-                  title="Sem anexos"
-                  description="Nenhum arquivo foi anexado neste chamado."
-                  icon={FileText}
-                />
-              ) : (
-                <div className="space-y-2">
-                  {ticket.attachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="rounded-lg border p-3 text-sm flex items-center justify-between gap-3"
-                    >
-                      <span className="truncate">{attachment.name}</span>
-                      <span className="text-muted-foreground">{attachment.sizeKb} KB</span>
+          {/* Alerta de Solução Concluída */}
+          {ticket.solution && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+                <CheckCircle2 className="size-5" /> Resolução / Solução Aplicada:
+              </div>
+              <p className="text-sm mt-2 text-foreground whitespace-pre-wrap leading-relaxed">
+                {ticket.solution}
+              </p>
+            </div>
+          )}
+
+          {/* Dados do Chamado */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-muted/20 border text-sm">
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Setor</span>
+              <span className="font-medium">{getDepartmentName(departments, ticket.departmentId)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Filial / Local</span>
+              <span className="font-medium">{getBranchName(branches, ticket.branchId)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Equipamento / Patrimônio</span>
+              <span className="font-medium">{ticket.equipment || ticket.assetTag || "-"}</span>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <div className="space-y-2">
+            <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">
+              Descrição Detalhada do Problema
+            </h3>
+            <div className="rounded-2xl border bg-background p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed shadow-sm">
+              {ticket.description}
+            </div>
+          </div>
+
+          {/* Anexos */}
+          <div className="space-y-4 border-t pt-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm tracking-wide text-foreground uppercase flex items-center gap-2">
+                <Paperclip className="size-4 text-primary" /> Anexos e Documentos ({ticket.attachments.length})
+              </h3>
+              {attachmentFiles.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAttachmentFiles([])}
+                  className="text-xs h-7 text-muted-foreground hover:text-destructive gap-1 cursor-pointer"
+                >
+                  <Trash2 className="size-3.5" /> Limpar seleção ({attachmentFiles.length})
+                </Button>
+              )}
+            </div>
+
+            {ticket.attachments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum arquivo anexado nesta solicitação.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ticket.attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="rounded-xl border p-3 text-sm flex items-center justify-between gap-3 bg-muted/15 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {getFileIcon(attachment.name)}
+                      <div className="min-w-0">
+                        <span className="truncate font-medium text-xs block text-foreground">{attachment.name}</span>
+                        <span className="text-[10px] text-muted-foreground block font-mono">{attachment.sizeKb} KB</span>
+                      </div>
                     </div>
-                  ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-medium gap-1 shrink-0 cursor-pointer hover:bg-primary/10 hover:text-primary"
+                      onClick={() => void downloadAttachmentFile(attachment.id, attachment.name)}
+                    >
+                      <Download className="size-3" /> Baixar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Multi-file selector dropzone */}
+            <div className="space-y-2.5 pt-2">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  handleAppendFiles(e.dataTransfer.files);
+                }}
+                className={`border-2 border-dashed rounded-xl p-4 text-center transition-all cursor-pointer select-none ${
+                  isDragging
+                    ? "border-primary bg-primary/10 scale-[1.01]"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30 bg-muted/10"
+                }`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  disabled={isUploadingAttachments}
+                  className="hidden"
+                  onChange={(event) => {
+                    handleAppendFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <UploadCloud className="size-4 text-primary" />
+                    <span>Clique ou arraste arquivos para anexar</span>
+                  </div>
+                  <span className="hidden sm:inline">•</span>
+                  <span>Aceita todos os formatos (.OFX, .PDF, Imagens, XML, Planilhas)</span>
+                </div>
+              </div>
+
+              {attachmentFiles.length > 0 && (
+                <div className="rounded-xl border bg-card p-3 space-y-2 shadow-xs">
+                  <div className="text-xs font-semibold text-muted-foreground px-1 flex items-center justify-between">
+                    <span>Arquivos prontos para envio ({attachmentFiles.length}):</span>
+                    <span>Total: {formatBytes(attachmentFiles.reduce((acc, f) => acc + f.size, 0))}</span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {attachmentFiles.map((file, idx) => (
+                      <div
+                        key={`${file.name}-${idx}`}
+                        className="rounded-lg border bg-muted/20 hover:bg-muted/40 p-2 text-xs flex items-center justify-between gap-2 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {getFileIcon(file.name)}
+                          <span className="truncate font-medium">{file.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">({formatBytes(file.size)})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile(idx);
+                          }}
+                          title="Remover arquivo"
+                          className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <Button
+                      size="sm"
+                      disabled={isUploadingAttachments}
+                      onClick={() => void submitAttachments()}
+                      className="gap-1.5 text-xs cursor-pointer"
+                    >
+                      <Paperclip className="size-3.5" />
+                      {isUploadingAttachments ? "Enviando arquivos..." : `Enviar ${attachmentFiles.length} anexo(s)`}
+                    </Button>
+                  </div>
                 </div>
               )}
-              <div className="mt-3 space-y-2">
-                <Input
-                  type="file"
-                  onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
-                />
-                <Button size="sm" variant="outline" onClick={() => void submitAttachment()}>
-                  <Paperclip className="size-4" /> Anexar arquivo
-                </Button>
-              </div>
-            </section>
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="text-base">Avaliacao do atendimento</CardTitle>
-            <CardDescription>Disponivel quando o chamado estiver finalizado.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {ticket.rating ? (
-              <p className="text-sm">
-                Nota registrada: <strong>{ticket.rating}/5</strong>
-              </p>
-            ) : null}
-
-            {canRate ? (
-              <div className="rounded-xl border p-3">
-                <p className="text-sm font-medium mb-2">Avalie o atendimento</p>
-                <div className="flex gap-1 mb-2">
-                  {[1, 2, 3, 4, 5].map((score) => (
-                    <button
-                      key={score}
-                      type="button"
-                      onClick={() => setRating(score)}
-                      className={`size-8 rounded-md border grid place-items-center transition ${
-                        rating >= score
-                          ? "bg-warning/25 text-warning-foreground border-warning/40"
-                          : "bg-background hover:bg-muted/40"
-                      }`}
-                      aria-label={`Avaliar com nota ${score}`}
-                    >
-                      <Star className="size-4" />
-                    </button>
-                  ))}
-                </div>
-                <Textarea
-                  value={ratingComment}
-                  onChange={(event) => setRatingComment(event.target.value)}
-                  placeholder="Comentario opcional"
-                  rows={3}
-                />
-                <Button className="mt-2 w-full" onClick={() => void submitRating()}>
-                  Enviar avaliacao
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Status atual: {statusLabel[ticket.status]}. A avaliacao sera habilitada quando a OS
-                for finalizada.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4">
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <MessageCircle className="size-4" /> Comentarios publicos
-            </CardTitle>
-            <CardDescription>Converse com a equipe de TI no proprio chamado.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      {/* Seção de Comentários / Atendimento */}
+      <Card className="shadow-[var(--shadow-card)] border">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="size-4 text-primary" /> Mensagens e Acompanhamento
+          </CardTitle>
+          <CardDescription>
+            Converse diretamente com o técnico responsável pelo seu chamado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
             {publicComments.length === 0 ? (
               <EmptyState
                 compact
-                title="Sem comentarios publicos"
-                description="Escreva a primeira mensagem para este chamado."
+                title="Nenhuma mensagem ainda"
+                description="Envie uma mensagem abaixo se precisar adicionar informações ou dúvidas."
               />
             ) : (
               publicComments.map((entry) => (
-                <div key={entry.id} className="rounded-xl border p-3">
-                  <p className="text-sm font-medium">{entry.authorName}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</p>
-                  <p className="text-sm mt-2 whitespace-pre-wrap">{entry.content}</p>
+                <div key={entry.id} className="rounded-2xl border p-4 bg-muted/20 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-foreground">{entry.authorName}</span>
+                    <span className="text-[11px] text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {entry.content}
+                  </p>
                 </div>
               ))
             )}
+          </div>
 
-            <div className="space-y-2 pt-2">
-              <Label>Novo comentario</Label>
-              <Textarea
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="Escreva uma mensagem para a equipe"
-              />
-              <Button onClick={() => void sendComment()}>
-                <Send className="size-4" /> Comentar
-              </Button>
+          <div className="space-y-2 border-t pt-4">
+            <Label className="text-xs font-semibold">Adicionar Mensagem</Label>
+            <Textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              placeholder="Digite sua mensagem para o suporte de TI..."
+              rows={3}
+            />
+            <Button onClick={() => void sendComment()}>
+              <Send className="size-4" /> Enviar Mensagem
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Avaliação */}
+      {canRate && (
+        <Card className="shadow-[var(--shadow-card)] border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" /> Avaliação do Atendimento
+            </CardTitle>
+            <CardDescription>
+              Sua opinião ajuda a equipe de TI a melhorar continuamente o suporte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((score) => (
+                <button
+                  key={score}
+                  type="button"
+                  onClick={() => setRating(score)}
+                  className={`size-10 rounded-xl font-bold text-sm transition-all ${
+                    rating >= score
+                      ? "bg-primary text-primary-foreground shadow-md scale-105"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {score}★
+                </button>
+              ))}
             </div>
+            <Textarea
+              placeholder="Comentário sobre o atendimento recebido (opcional)..."
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              rows={2}
+            />
+            <Button onClick={() => void submitRating()}>Salvar Avaliação</Button>
           </CardContent>
         </Card>
-      </section>
+      )}
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos auxiliares do Admin
+// ─────────────────────────────────────────────────────────────────────────────
 type TicketEditForm = {
   title: string;
   requesterName: string;
@@ -408,6 +668,9 @@ type ConfirmationAction = {
   onConfirm: () => Promise<void>;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Visão TI_ADMIN com Hierarquia Vertical e Central de Ações Inferior
+// ─────────────────────────────────────────────────────────────────────────────
 function AdminTicketView({ ticket }: { ticket: Ticket }) {
   const {
     users,
@@ -417,15 +680,89 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     audit,
     addComment,
     updateTicket,
+    extendTicketSla,
     uploadAttachment,
     registerWhatsappPrepared,
   } = useApp();
+
   const admins = users.filter(
     (user) => user.role === "TI_ADMIN" && user.active && user.canReceiveTickets,
   );
 
-  const [publicComment, setPublicComment] = useState("");
   const queryClient = useQueryClient();
+  const [publicComment, setPublicComment] = useState("");
+  const [internalComment, setInternalComment] = useState("");
+  const [adminAttachmentFiles, setAdminAttachmentFiles] = useState<File[]>([]);
+  const [isAdminUploadingAttachments, setIsAdminUploadingAttachments] = useState(false);
+  const [isAdminDragging, setIsAdminDragging] = useState(false);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAdminAppendFiles = (newFilesList: FileList | File[] | null) => {
+    if (!newFilesList || newFilesList.length === 0) return;
+    const incoming = Array.from(newFilesList);
+
+    setAdminAttachmentFiles((prev) => {
+      const existingKeySet = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const nonDuplicates: File[] = [];
+      let duplicateCount = 0;
+
+      for (const f of incoming) {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (!existingKeySet.has(key)) {
+          existingKeySet.add(key);
+          nonDuplicates.push(f);
+        } else {
+          duplicateCount++;
+        }
+      }
+
+      if (duplicateCount > 0) {
+        toast.info(`${duplicateCount} arquivo(s) duplicados foram ignorados.`);
+      }
+      if (nonDuplicates.length > 0) {
+        toast.success(`${nonDuplicates.length} arquivo(s) selecionado(s).`);
+      }
+
+      return [...prev, ...nonDuplicates];
+    });
+  };
+
+  const handleAdminRemoveFile = (indexToRemove: number) => {
+    setAdminAttachmentFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // Modais de Controle
+  const [waitingReasonOpen, setWaitingReasonOpen] = useState(false);
+  const [waitingReason, setWaitingReason] = useState("");
+  const [isExtendSlaOpen, setIsExtendSlaOpen] = useState(false);
+  const [slaExtendHours, setSlaExtendHours] = useState<number>(24);
+  const [slaExtendReason, setSlaExtendReason] = useState("");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmationAction | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState(false);
+
+  const handleConfirmSignature = async (dataUrl: string, signerName: string, documentId?: string) => {
+    const note = `✍️ Assinatura digital coletada confirmando o atendimento / entrega do equipamento.\n• Responsável pelo Recebimento: ${signerName}${documentId ? `\n• Documento / Matrícula: ${documentId}` : ""}`;
+    await addComment(ticket.id, note, false);
+
+    try {
+      const arr = dataUrl.split(",");
+      const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const file = new File([u8arr], `Assinatura_${ticket.protocol}_${Date.now()}.png`, { type: mime });
+      await uploadAttachment(ticket.id, file);
+    } catch (e) {
+      console.error("Erro ao converter assinatura para anexo:", e);
+    }
+  };
+
+  // Troca de Periférico
   const [activeReplacementComp, setActiveReplacementComp] = useState<Asset | null>(null);
   const [isReplacingOpen, setIsReplacingOpen] = useState(false);
   const [selectedReplacementAssetId, setSelectedReplacementAssetId] = useState<string>("");
@@ -459,13 +796,11 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     }
 
     try {
-      // 1. Desvincular periférico antigo
       await updateAsset(activeReplacementComp.id, {
-        parentId: null,
+        parentId: undefined,
         status: "MANUTENCAO" as any,
       });
 
-      // 2. Vincular periférico novo
       await updateAsset(newAsset.id, {
         parentId: ticket.assetId!,
         status: "EM_USO" as any,
@@ -473,7 +808,6 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
         departmentId: ticket.departmentId,
       });
 
-      // 3. Registrar comentário interno na OS
       await addComment(
         ticket.id,
         `Troca de periférico realizada:\n• Retirado: ${activeReplacementComp.name} (${activeReplacementComp.code})\n• Instalado: ${newAsset.name} (${newAsset.code})`,
@@ -487,16 +821,12 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
 
       void queryClient.invalidateQueries({ queryKey: ["ticket-asset", ticket.assetId] });
       void refetchAsset();
-    } catch (error) {
+    } catch {
       toast.error("Falha ao realizar a substituição do periférico.");
     }
   };
-  const [internalComment, setInternalComment] = useState("");
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-  const [waitingReasonOpen, setWaitingReasonOpen] = useState(false);
-  const [waitingReason, setWaitingReason] = useState("");
-  const [confirmAction, setConfirmAction] = useState<ConfirmationAction | null>(null);
-  const [confirmingAction, setConfirmingAction] = useState(false);
+
+  // Formulário de Edição
   const [ticketForm, setTicketForm] = useState<TicketEditForm>({
     title: ticket.title ?? "",
     requesterName: ticket.requesterName ?? "",
@@ -513,6 +843,8 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     impact: ticket.impact ?? "",
     additionalNotes: ticket.additionalNotes ?? "",
   });
+
+  // Formulário Técnico
   const [technical, setTechnical] = useState<TicketTechnicalForm>({
     diagnosis: ticket.diagnosis ?? "",
     rootCause: ticket.rootCause ?? "",
@@ -561,12 +893,6 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     [categories, ticketForm.categoryId],
   );
   const availableSubcategories = selectedCategory?.subcategories ?? [];
-  const displayedSubcategoryLabel = useMemo(() => {
-    if (!ticket.subcategory) return "-";
-    const category = categories.find((item) => item.id === ticket.categoryId);
-    const subcategory = category?.subcategories?.find((item) => item.id === ticket.subcategory);
-    return subcategory?.name ?? ticket.subcategory;
-  }, [categories, ticket.categoryId, ticket.subcategory]);
 
   const publicComments = ticket.comments.filter((entry) => !entry.internal);
   const internalComments = ticket.comments.filter((entry) => entry.internal);
@@ -578,7 +904,7 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
       await confirmAction.onConfirm();
       setConfirmAction(null);
     } catch {
-      // Errors are already handled inside each action.
+      // Handled in callback
     } finally {
       setConfirmingAction(false);
     }
@@ -604,7 +930,7 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
       !ticketForm.description.trim()
     ) {
       toast.error(
-        "Preencha os campos obrigatorios: solicitante, telefone, setor, filial/local e descricao.",
+        "Preencha os campos obrigatórios: solicitante, telefone, setor, filial e descrição.",
       );
       return;
     }
@@ -626,18 +952,18 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
         impact: ticketForm.impact.trim() || undefined,
         additionalNotes: ticketForm.additionalNotes.trim() || undefined,
       });
-      toast.success("Dados da OS atualizados.");
+      toast.success("Dados da OS atualizados e SLA recalculado com sucesso.");
+      setIsEditModalOpen(false);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel salvar edicao da OS.";
+        error instanceof Error ? error.message : "Não foi possível salvar edição da OS.";
       toast.error(message);
-      throw error;
     }
   };
 
   const saveTechnicalData = async () => {
     if (technical.timeSpentMinutes && Number.isNaN(Number(technical.timeSpentMinutes))) {
-      toast.error("Tempo gasto deve ser um numero em minutos.");
+      toast.error("Tempo gasto deve ser um número válido em minutos.");
       return;
     }
 
@@ -653,29 +979,52 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
         internalNotes: technical.internalNotes,
         resolutionSummary: technical.resolutionSummary,
       });
-      toast.success("Dados tecnicos atualizados.");
+      toast.success("Dados técnicos salvos com sucesso.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel salvar dados tecnicos.";
+        error instanceof Error ? error.message : "Não foi possível salvar dados técnicos.";
       toast.error(message);
-      throw error;
+    }
+  };
+
+  const handleExtendSla = async () => {
+    if (!slaExtendHours || slaExtendHours <= 0) {
+      toast.error("Informe a quantidade de horas para prorrogação.");
+      return;
+    }
+    if (!slaExtendReason.trim()) {
+      toast.error("Informe a justificativa/motivo para a prorrogação de prazo.");
+      return;
+    }
+
+    try {
+      await extendTicketSla(ticket.id, {
+        extendHours: slaExtendHours,
+        reason: slaExtendReason.trim(),
+      });
+      toast.success(`Prazo de SLA prorrogado com sucesso (+${slaExtendHours}h).`);
+      setIsExtendSlaOpen(false);
+      setSlaExtendReason("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao prorrogar prazo.";
+      toast.error(message);
     }
   };
 
   const postPublic = async () => {
     const validation = commentSchema.safeParse({ content: publicComment });
     if (!validation.success) {
-      toast.error(validation.error.issues[0]?.message ?? "Comentario invalido.");
+      toast.error(validation.error.issues[0]?.message ?? "Comentário inválido.");
       return;
     }
 
     try {
       await addComment(ticket.id, validation.data.content, false);
       setPublicComment("");
-      toast.success("Comentario publico enviado.");
+      toast.success("Comentário público enviado ao solicitante.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel enviar comentario publico.";
+        error instanceof Error ? error.message : "Não foi possível enviar comentário.";
       toast.error(message);
     }
   };
@@ -683,33 +1032,44 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
   const postInternal = async () => {
     const validation = commentSchema.safeParse({ content: internalComment });
     if (!validation.success) {
-      toast.error(validation.error.issues[0]?.message ?? "Comentario invalido.");
+      toast.error(validation.error.issues[0]?.message ?? "Comentário inválido.");
       return;
     }
 
     try {
       await addComment(ticket.id, validation.data.content, true);
       setInternalComment("");
-      toast.success("Comentario interno salvo.");
+      toast.success("Nota interna salva.");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Nao foi possivel salvar comentario interno.";
+        error instanceof Error ? error.message : "Não foi possível salvar nota interna.";
       toast.error(message);
     }
   };
 
-  const submitAttachment = async (internal: boolean) => {
-    if (!attachmentFile) {
-      toast.error("Selecione um arquivo para anexar.");
+  const submitAdminAttachments = async (internal: boolean) => {
+    if (adminAttachmentFiles.length === 0) {
+      toast.error("Selecione pelo menos um arquivo para anexar.");
       return;
     }
+    setIsAdminUploadingAttachments(true);
+    let successCount = 0;
     try {
-      await uploadAttachment(ticket.id, attachmentFile, internal);
-      setAttachmentFile(null);
-      toast.success(internal ? "Anexo interno enviado." : "Anexo publico enviado.");
+      for (const file of adminAttachmentFiles) {
+        await uploadAttachment(ticket.id, file, internal);
+        successCount++;
+      }
+      setAdminAttachmentFiles([]);
+      toast.success(
+        internal
+          ? `${successCount} anexo(s) interno(s) enviado(s).`
+          : `${successCount} anexo(s) público(s) enviado(s).`,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Nao foi possivel anexar arquivo.";
+      const message = error instanceof Error ? error.message : "Não foi possível anexar arquivo.";
       toast.error(message);
+    } finally {
+      setIsAdminUploadingAttachments(false);
     }
   };
 
@@ -730,35 +1090,7 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
       );
       toast.success(`Status alterado para ${statusLabel[status]}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Nao foi possivel alterar status.";
-      toast.error(message);
-      throw error;
-    }
-  };
-
-  const actionChangePriority = async (priority: Ticket["priority"]) => {
-    try {
-      await updateTicket(ticket.id, { priority });
-      toast.success(`Prioridade alterada para ${priorityLabel[priority]}.`);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel alterar prioridade.";
-      toast.error(message);
-      throw error;
-    }
-  };
-
-  const actionChangeAssignee = async (assigneeId?: string) => {
-    try {
-      await updateTicket(ticket.id, { assigneeId });
-      toast.success(
-        assigneeId
-          ? `Responsavel definido: ${getUserName(users, assigneeId)}.`
-          : "OS ficou sem responsavel definido.",
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel alterar responsavel.";
+      const message = error instanceof Error ? error.message : "Não foi possível alterar status.";
       toast.error(message);
       throw error;
     }
@@ -766,9 +1098,9 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
 
   const queueStatusConfirmation = (nextStatus: Ticket["status"], statusNote?: string) => {
     setConfirmAction({
-      title: "Confirmar alteracao de status",
-      description: `A OS ${ticket.protocol} sera movida para ${statusLabel[nextStatus]}. Essa acao gera historico e auditoria.`,
-      confirmLabel: "Confirmar status",
+      title: "Confirmar alteração de status",
+      description: `A OS ${ticket.protocol} será movida para ${statusLabel[nextStatus]}. Essa ação gera histórico e auditoria.`,
+      confirmLabel: `Mover para ${statusLabel[nextStatus]}`,
       destructive: nextStatus === "CANCELADO",
       onConfirm: () => actionChangeStatus(nextStatus, statusNote),
     });
@@ -787,725 +1119,1138 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
   const confirmWaitingReason = () => {
     const note = waitingReason.trim();
     if (!note) {
-      toast.error("Informe o que esta sendo aguardado do solicitante.");
+      toast.error("Informe o que está sendo aguardado do solicitante.");
       return;
     }
     setWaitingReasonOpen(false);
     queueStatusConfirmation("AGUARDANDO_USUARIO", note);
   };
 
-  const queuePriorityChange = (nextPriority: Ticket["priority"]) => {
-    if (nextPriority === ticket.priority) return;
-    setConfirmAction({
-      title: "Confirmar alteracao de prioridade",
-      description: `A prioridade real da OS ${ticket.protocol} sera alterada para ${priorityLabel[nextPriority]}.`,
-      confirmLabel: "Confirmar prioridade",
-      onConfirm: () => actionChangePriority(nextPriority),
-    });
+  const actionChangePriority = async (priority: Ticket["priority"]) => {
+    try {
+      await updateTicket(ticket.id, { priority });
+      toast.success(`Prioridade alterada para ${priorityLabel[priority]}.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível alterar prioridade.";
+      toast.error(message);
+    }
   };
 
-  const queueAssigneeChange = (nextAssigneeId: string) => {
-    const normalized = nextAssigneeId || undefined;
-    if (normalized === ticket.assigneeId) return;
-    const targetName = normalized ? getUserName(users, normalized) : "Sem responsavel";
-
-    setConfirmAction({
-      title: "Confirmar definicao de responsavel",
-      description: `A OS ${ticket.protocol} sera atribuida para ${targetName}.`,
-      confirmLabel: "Confirmar responsavel",
-      onConfirm: () => actionChangeAssignee(normalized),
-    });
+  const actionChangeAssignee = async (assigneeId?: string) => {
+    try {
+      await updateTicket(ticket.id, { assigneeId });
+      toast.success(
+        assigneeId
+          ? `Responsável definido: ${getUserName(users, assigneeId)}.`
+          : "OS sem responsável definido.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível alterar responsável.";
+      toast.error(message);
+    }
   };
 
-  const queueSaveTicketEdits = () => {
-    setConfirmAction({
-      title: "Confirmar edicao da OS",
-      description:
-        "As alteracoes de dados da OS serao salvas e registradas no historico de atendimento e na auditoria.",
-      confirmLabel: "Salvar edicao",
-      onConfirm: saveTicketEdits,
-    });
+  const copyProtocol = () => {
+    navigator.clipboard.writeText(ticket.protocol);
+    toast.success("Protocolo copiado para a área de transferência!");
   };
-
-  const queueSaveTechnical = () => {
-    setConfirmAction({
-      title: "Confirmar dados tecnicos",
-      description:
-        "Diagnostico, causa raiz, solucao, observacoes internas e tempo gasto serao atualizados com auditoria.",
-      confirmLabel: "Salvar dados tecnicos",
-      onConfirm: saveTechnicalData,
-    });
-  };
-
-  const hasCategory = ticketForm.categoryId.length > 0;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`OS ${ticket.protocol}`}
-        description="Visao TI_ADMIN com controle completo, area interna tecnica e rastreabilidade."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => queueStatusChange("RESOLVIDO")}>
-              Resolver
-            </Button>
-            <Button variant="outline" onClick={() => queueStatusChange("FINALIZADO")}>
-              Finalizar
-            </Button>
-            <Button variant="outline" onClick={() => queueStatusChange("REABERTO")}>
-              Reabrir
-            </Button>
-            <Button variant="outline" onClick={() => queueStatusChange("CANCELADO")}>
-              Cancelar
-            </Button>
-          </div>
-        }
-      />
+    <div className="space-y-6 max-w-6xl mx-auto pb-24 fade-slide-up">
+      {/* Top Breadcrumb & Quick Info */}
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          to="/app/chamados"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors"
+        >
+          <ArrowLeft className="size-4" /> Voltar para Gestão de OS
+        </Link>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Criado em: {formatDateTime(ticket.createdAt)}</span>
+          <span>•</span>
+          <span className="font-mono">{ticket.id}</span>
+        </div>
+      </div>
 
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card className="xl:col-span-2 shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <CardTitle>{ticket.title}</CardTitle>
-              <div className="flex items-center gap-2">
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      {/* HERO BANNER VERTICAL / OVERVIEW                                       */}
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      <Card className="shadow-[var(--shadow-card)] border overflow-hidden bg-card">
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 border-b">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            {/* Lado Esquerdo: Protocolo + Título + Badges */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={copyProtocol}
+                  title="Clique para copiar o protocolo"
+                  className="group inline-flex items-center gap-1.5 font-mono text-sm font-bold bg-primary text-primary-foreground px-3 py-1 rounded-lg shadow-sm hover:opacity-90 transition active:scale-95"
+                >
+                  {ticket.protocol}
+                  <Copy className="size-3.5 opacity-70 group-hover:opacity-100" />
+                </button>
                 <StatusBadge status={ticket.status} />
                 <PriorityBadge priority={ticket.priority} />
+                {ticket.categoryId && (
+                  <Badge variant="outline" className="bg-background/80 font-medium">
+                    {getCategoryName(categories, ticket.categoryId)}
+                  </Badge>
+                )}
               </div>
-            </div>
-            <CardDescription>
-              {ticket.requesterName} ({ticket.requesterPhone}) - {formatDateTime(ticket.createdAt)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <FieldSelect
-                label="Status"
-                value={ticket.status}
-                onChange={(value) => queueStatusChange(value as Ticket["status"])}
-                options={STATUS_FLOW.map((item) => ({ value: item, label: statusLabel[item] }))}
-              />
-              <FieldSelect
-                label="Prioridade real"
-                value={ticket.priority}
-                onChange={(value) => queuePriorityChange(value as Ticket["priority"])}
-                options={PRIORITY_LEVELS.map((item) => ({
-                  value: item,
-                  label: priorityLabel[item],
-                }))}
-              />
-              <FieldSelect
-                label="Responsavel"
-                value={ticket.assigneeId ?? ""}
-                onChange={(value) => queueAssigneeChange(value)}
-                options={[
-                  { value: "", label: "Sem responsavel" },
-                  ...admins.map((admin) => ({ value: admin.id, label: admin.name })),
-                ]}
-              />
-            </div>
 
-            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
-              <h3 className="font-medium">Visao operacional completa</h3>
-              <p className="text-xs text-muted-foreground">
-                Toda alteracao relevante gera historico de status e audit log automaticamente.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <FieldInfo label="Protocolo" value={ticket.protocol} />
-                <FieldInfo label="SLA" value={`${ticket.slaHours} horas`} />
-                <FieldInfo
-                  label="Prioridade sugerida"
-                  value={
-                    ticket.suggestedPriority
-                      ? priorityLabel[ticket.suggestedPriority]
-                      : "Nao informada"
-                  }
-                />
-                <FieldInfo label="Solicitante" value={ticket.requesterName} />
-                <FieldInfo label="Telefone" value={ticket.requesterPhone} />
-                <FieldInfo label="E-mail" value={ticket.requesterEmail} />
-                <FieldInfo
-                  label="Setor"
-                  value={getDepartmentName(departments, ticket.departmentId)}
-                />
-                <FieldInfo label="Filial/local" value={getBranchName(branches, ticket.branchId)} />
-                <FieldInfo
-                  label="Categoria"
-                  value={getCategoryName(categories, ticket.categoryId)}
-                />
-                <FieldInfo label="Subcategoria" value={displayedSubcategoryLabel} />
-                <FieldInfo label="Equipamento" value={ticket.equipment || "-"} />
-                <FieldInfo label="Patrimonio" value={ticket.assetTag || "-"} />
-                <FieldInfo label="Responsavel" value={getUserName(users, ticket.assigneeId)} />
-                <FieldInfo label="Impacto" value={ticket.impact || "-"} />
-                <FieldInfo
-                  label="Aguardando retorno"
-                  value={ticket.waitingRequesterMessage || "-"}
-                />
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                {ticket.title || "Ordem de Serviço"}
+              </h1>
+
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1">
+                  <User className="size-3.5" /> Solicitante: <strong>{ticket.requesterName}</strong>
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="size-3.5" /> {getDepartmentName(departments, ticket.departmentId)} - {getBranchName(branches, ticket.branchId)}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <UserCheck className="size-3.5" /> Responsável:{" "}
+                  <strong>{ticket.assigneeId ? getUserName(users, ticket.assigneeId) : "Não atribuído"}</strong>
+                </span>
               </div>
             </div>
 
-            <div className="rounded-xl border p-4 space-y-3">
-              <h3 className="font-medium">Editar OS</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Titulo</Label>
-                  <Input
-                    value={ticketForm.title}
-                    onChange={(event) => updateTicketForm("title", event.target.value)}
-                    placeholder="Resumo curto da OS"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Prioridade sugerida</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={ticketForm.suggestedPriority}
-                    onChange={(event) =>
-                      updateTicketForm(
-                        "suggestedPriority",
-                        event.target.value as TicketEditForm["suggestedPriority"],
-                      )
-                    }
-                  >
-                    <option value="">Nao informada</option>
-                    {PRIORITY_LEVELS.map((item) => (
-                      <option key={item} value={item}>
-                        {priorityLabel[item]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Nome do solicitante</Label>
-                  <Input
-                    value={ticketForm.requesterName}
-                    onChange={(event) => updateTicketForm("requesterName", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Telefone</Label>
-                  <Input
-                    value={ticketForm.requesterPhone}
-                    onChange={(event) => updateTicketForm("requesterPhone", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Setor</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={ticketForm.departmentId}
-                    onChange={(event) => updateTicketForm("departmentId", event.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Filial/local</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={ticketForm.branchId}
-                    onChange={(event) => updateTicketForm("branchId", event.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {formatBranchName(branch.name)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Categoria</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={ticketForm.categoryId}
-                    onChange={(event) => {
-                      updateTicketForm("categoryId", event.target.value);
-                      updateTicketForm("subcategory", "");
-                    }}
-                  >
-                    <option value="">Sem categoria</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Subcategoria</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={ticketForm.subcategory}
-                    onChange={(event) => updateTicketForm("subcategory", event.target.value)}
-                    disabled={!hasCategory || availableSubcategories.length === 0}
-                  >
-                    <option value="">
-                      {hasCategory ? "Sem subcategoria" : "Defina uma categoria antes"}
-                    </option>
-                    {availableSubcategories.map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>
-                        {subcategory.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Equipamento</Label>
-                  <Input
-                    value={ticketForm.equipment}
-                    onChange={(event) => updateTicketForm("equipment", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Patrimonio</Label>
-                  <Input
-                    value={ticketForm.assetTag}
-                    onChange={(event) => updateTicketForm("assetTag", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Melhor horario</Label>
-                  <Input
-                    value={ticketForm.bestTime}
-                    onChange={(event) => updateTicketForm("bestTime", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Impacto</Label>
-                  <Input
-                    value={ticketForm.impact}
-                    onChange={(event) => updateTicketForm("impact", event.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Descricao</Label>
-                <Textarea
-                  rows={4}
-                  value={ticketForm.description}
-                  onChange={(event) => updateTicketForm("description", event.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Observacoes adicionais</Label>
-                <Textarea
-                  rows={3}
-                  value={ticketForm.additionalNotes}
-                  onChange={(event) => updateTicketForm("additionalNotes", event.target.value)}
-                  placeholder="Campo opcional"
-                />
-              </div>
-              <Button onClick={queueSaveTicketEdits}>
-                <CheckCircle2 className="size-4" /> Salvar edicao da OS
+            {/* Lado Direito: SLA Countdown Vivo & Prorrogação Rápida */}
+            <div className="bg-background/95 backdrop-blur rounded-2xl p-4 border shadow-sm flex flex-col items-start lg:items-end gap-2 shrink-0 min-w-[240px]">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                Prazo de Atendimento (SLA)
+              </span>
+              <TicketSlaChip
+                createdAt={ticket.createdAt}
+                slaHours={ticket.slaHours}
+                closedAt={ticket.closedAt}
+                status={ticket.status}
+                slaDueAt={ticket.slaDueAt}
+                showDetailed={true}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs font-semibold text-primary hover:text-primary gap-1 mt-1 w-full"
+                onClick={() => setIsExtendSlaOpen(true)}
+              >
+                <Clock className="size-3.5" /> Prorrogar Prazo de SLA
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CircleDashed className="size-4" /> SLA e acoes rapidas
+        {/* Barra Rápida de Atribuição e Prioridade Real */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/20 border-b text-sm">
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-muted-foreground">Responsável Técnico</Label>
+            <select
+              className="h-9 w-full rounded-md border bg-background px-3 text-xs font-medium"
+              value={ticket.assigneeId ?? ""}
+              onChange={(e) => void actionChangeAssignee(e.target.value || undefined)}
+            >
+              <option value="">-- Sem Responsável Atribuído --</option>
+              {admins.map((admin) => (
+                <option key={admin.id} value={admin.id}>
+                  {admin.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-muted-foreground">Prioridade Real (T.I.)</Label>
+            <select
+              className="h-9 w-full rounded-md border bg-background px-3 text-xs font-medium"
+              value={ticket.priority}
+              onChange={(e) => void actionChangePriority(e.target.value as Ticket["priority"])}
+            >
+              {PRIORITY_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {priorityLabel[level]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-muted-foreground">Alterar Status Rápido</Label>
+            <select
+              className="h-9 w-full rounded-md border bg-background px-3 text-xs font-medium"
+              value={ticket.status}
+              onChange={(e) => queueStatusChange(e.target.value as Ticket["status"])}
+            >
+              {STATUS_FLOW.map((s) => (
+                <option key={s} value={s}>
+                  {statusLabel[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      {/* CORPO VERTICAL DE SEÇÕES ESTRUTURADAS                                 */}
+      {/* ───────────────────────────────────────────────────────────────────── */}
+
+      {/* Alerta de Mensagem Aguardada */}
+      {ticket.status === "AGUARDANDO_USUARIO" && ticket.waitingRequesterMessage && (
+        <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
+            <AlertCircle className="size-5" /> Aguardando Retorno do Solicitante:
+          </div>
+          <p className="text-sm mt-2 text-foreground font-medium whitespace-pre-wrap leading-relaxed">
+            {ticket.waitingRequesterMessage}
+          </p>
+        </div>
+      )}
+
+      {/* CARD 1: Solicitante & Localização */}
+      <Card className="shadow-[var(--shadow-card)] border bg-card hover-card-premium">
+        <CardHeader className="pb-3 border-b bg-muted/10">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 font-bold">
+              <User className="size-4 text-primary" /> 1. Dados do Solicitante e Localização
             </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <TicketSlaChip
-              createdAt={ticket.createdAt}
-              slaHours={ticket.slaHours}
-              closedAt={ticket.closedAt}
-            />
-            <p className="text-sm text-muted-foreground">Tempo alvo: {ticket.slaHours} horas</p>
             <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => queueStatusChange("EM_ATENDIMENTO")}
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-primary gap-1"
+              onClick={() => setIsEditModalOpen(true)}
             >
-              Marcar em atendimento
+              <Edit3 className="size-3.5" /> Editar Dados
             </Button>
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => queueStatusChange("AGUARDANDO_USUARIO")}
-            >
-              Aguardando usuario
-            </Button>
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => queueStatusChange("AGUARDANDO_PECA")}
-            >
-              Aguardando peca/terceiro
-            </Button>
-          </CardContent>
-        </Card>
-
-        {assetDetail && (
-          <Card className="shadow-[var(--shadow-card)] hover-card-premium fade-slide-up bg-card border border-border">
-            <CardHeader className="pb-3 border-b bg-muted/10">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Package className="size-4 text-primary animate-pulse" />
-                Equipamento Relacionado
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Informações do ativo e periféricos associados.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                    {assetDetail.code}
-                  </span>
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                    {assetDetail.assetType?.name}
-                  </span>
-                </div>
-                <h4 className="font-semibold text-sm mt-1">{assetDetail.name}</h4>
-                {assetDetail.hostname && (
-                  <p className="text-xs font-mono text-muted-foreground">
-                    Hostname: <span className="font-bold text-primary">{assetDetail.hostname}</span>
-                  </p>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Nome Completo</span>
+              <span className="font-semibold text-foreground">{ticket.requesterName}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Telefone / Contato</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{ticket.requesterPhone || "-"}</span>
+                {ticket.requesterPhone && (
+                  <a
+                    href={`https://wa.me/55${ticket.requesterPhone.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-600 hover:text-emerald-500 inline-flex items-center text-xs font-bold"
+                    title="Abrir WhatsApp"
+                  >
+                    <MessageCircle className="size-4" />
+                  </a>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Setor: <span className="font-medium text-foreground">{assetDetail.department?.name || 'Não informado'}</span>
-                </p>
+              </div>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">E-mail</span>
+              <span className="font-medium text-muted-foreground">{ticket.requesterEmail || "-"}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Setor</span>
+              <span className="font-medium">{getDepartmentName(departments, ticket.departmentId)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Filial / Unidade</span>
+              <span className="font-medium">{formatBranchName(getBranchName(branches, ticket.branchId))}</span>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block font-semibold">Melhor Horário para Atendimento</span>
+              <span className="font-medium">{ticket.bestTime || "Horário comercial padrão"}</span>
+            </div>
+            {ticket.impact && (
+              <div className="sm:col-span-2 md:col-span-3">
+                <span className="text-xs text-muted-foreground block font-semibold">Impacto na Operação</span>
+                <span className="font-medium text-foreground">{ticket.impact}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CARD 2: Equipamento e Periféricos Vinculados */}
+      <Card className="shadow-[var(--shadow-card)] border bg-card hover-card-premium">
+        <CardHeader className="pb-3 border-b bg-muted/10">
+          <CardTitle className="text-base flex items-center gap-2 font-bold">
+            <Laptop className="size-4 text-primary" /> 2. Equipamento e Periféricos Vinculados
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-4">
+          {assetDetail ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
+                <div>
+                  <span className="text-xs text-muted-foreground block font-semibold">Patrimônio / Código</span>
+                  <span className="font-mono font-bold text-primary text-base">{assetDetail.code}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block font-semibold">Nome do Equipamento</span>
+                  <span className="font-bold text-foreground">{assetDetail.name}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block font-semibold">Hostname</span>
+                  <span className="font-mono font-bold text-foreground">{assetDetail.hostname || "-"}</span>
+                </div>
               </div>
 
-              <div className="space-y-2 border-t pt-3">
-                <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Periféricos Instalados
-                </h5>
+              {/* Periféricos associados */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Periféricos Vinculados ao Equipamento
+                </h4>
                 {!assetDetail.components || assetDetail.components.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum periférico vinculado.</p>
+                  <p className="text-xs text-muted-foreground p-3 rounded-lg border bg-muted/10">
+                    Nenhum periférico (mouse, teclado, monitor, nobreak) vinculado a esta máquina.
+                  </p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {assetDetail.components.map((comp: any) => (
-                      <div key={comp.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors text-xs">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold truncate">{comp.name}</p>
-                          <p className="font-mono text-[10px] text-muted-foreground">{comp.code}</p>
+                      <div
+                        key={comp.id}
+                        className="flex items-center justify-between gap-3 p-3 rounded-xl border bg-muted/20 hover:bg-muted/40 transition text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-foreground truncate">{comp.name}</p>
+                          <p className="font-mono text-[11px] text-muted-foreground">{comp.code}</p>
                         </div>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="h-7 text-primary hover:text-primary-glow font-semibold"
+                          variant="outline"
+                          className="h-7 text-xs font-semibold text-primary hover:text-primary shrink-0"
                           onClick={() => {
                             setActiveReplacementComp(comp);
                             setIsReplacingOpen(true);
                           }}
                         >
-                          Trocar
+                          <RefreshCw className="size-3 mr-1" /> Trocar
                         </Button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-xs text-muted-foreground block font-semibold">Equipamento Declarado</span>
+                <span className="font-medium">{ticket.equipment || "Não informado"}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block font-semibold">Código de Patrimônio</span>
+                <span className="font-mono font-medium">{ticket.assetTag || "Não informado"}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      <section>
-        <WhatsAppMessagePanel
-          ticket={ticket}
-          assigneeName={getUserName(users, ticket.assigneeId)}
-          departmentName={getDepartmentName(departments, ticket.departmentId)}
-          branchName={getBranchName(branches, ticket.branchId)}
+      {/* CARD 3: Descrição e Evidências */}
+      <Card className="shadow-[var(--shadow-card)] border bg-card hover-card-premium">
+        <CardHeader className="pb-3 border-b bg-muted/10">
+          <CardTitle className="text-base flex items-center gap-2 font-bold">
+            <FileText className="size-4 text-primary" /> 3. Descrição do Problema e Anexos
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-5">
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Relato do Solicitante
+            </h4>
+            <div className="rounded-2xl border bg-background p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed shadow-sm font-normal">
+              {ticket.description}
+            </div>
+          </div>
+
+          {ticket.additionalNotes && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Observações Adicionais
+              </h4>
+              <div className="rounded-xl border bg-muted/15 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                {ticket.additionalNotes}
+              </div>
+            </div>
+          )}
+
+          {/* Anexos */}
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <Paperclip className="size-3.5" /> Arquivos Anexados ({ticket.attachments.length})
+              </h4>
+              {adminAttachmentFiles.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAdminAttachmentFiles([])}
+                  className="text-xs h-7 text-muted-foreground hover:text-destructive gap-1 cursor-pointer"
+                >
+                  <Trash2 className="size-3.5" /> Limpar seleção ({adminAttachmentFiles.length})
+                </Button>
+              )}
+            </div>
+
+            {ticket.attachments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum anexo nesta OS.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {ticket.attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="rounded-xl border p-3 text-xs flex items-center justify-between gap-3 bg-muted/15 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {getFileIcon(att.name)}
+                      <div className="min-w-0">
+                        <span className="truncate font-semibold block text-foreground">{att.name}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-muted-foreground font-mono">{att.sizeKb} KB</span>
+                          {att.internal && (
+                            <span className="text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 rounded border border-amber-500/30">
+                              Interno
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-medium gap-1 shrink-0 cursor-pointer hover:bg-primary/10 hover:text-primary"
+                      onClick={() => void downloadAttachmentFile(att.id, att.name)}
+                    >
+                      <Download className="size-3" /> Baixar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Multi-file selector dropzone for Admin */}
+            <div className="space-y-2.5 pt-2">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsAdminDragging(true);
+                }}
+                onDragLeave={() => setIsAdminDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsAdminDragging(false);
+                  handleAdminAppendFiles(e.dataTransfer.files);
+                }}
+                className={`border-2 border-dashed rounded-xl p-4 text-center transition-all cursor-pointer select-none ${
+                  isAdminDragging
+                    ? "border-primary bg-primary/10 scale-[1.01]"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30 bg-muted/10"
+                }`}
+                onClick={() => adminFileInputRef.current?.click()}
+              >
+                <input
+                  ref={adminFileInputRef}
+                  type="file"
+                  multiple
+                  disabled={isAdminUploadingAttachments}
+                  className="hidden"
+                  onChange={(event) => {
+                    handleAdminAppendFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <UploadCloud className="size-4 text-primary" />
+                    <span>Clique ou arraste arquivos para anexar</span>
+                  </div>
+                  <span className="hidden sm:inline">•</span>
+                  <span>Aceita todos os formatos (.OFX, .PDF, Imagens, XML, Planilhas, etc.)</span>
+                </div>
+              </div>
+
+              {adminAttachmentFiles.length > 0 && (
+                <div className="rounded-xl border bg-card p-3 space-y-2 shadow-xs">
+                  <div className="text-xs font-semibold text-muted-foreground px-1 flex items-center justify-between">
+                    <span>Arquivos prontos para upload ({adminAttachmentFiles.length}):</span>
+                    <span>Total: {formatBytes(adminAttachmentFiles.reduce((acc, f) => acc + f.size, 0))}</span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {adminAttachmentFiles.map((file, idx) => (
+                      <div
+                        key={`${file.name}-${idx}`}
+                        className="rounded-lg border bg-muted/20 hover:bg-muted/40 p-2 text-xs flex items-center justify-between gap-2 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {getFileIcon(file.name)}
+                          <span className="truncate font-medium">{file.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">({formatBytes(file.size)})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdminRemoveFile(idx);
+                          }}
+                          title="Remover arquivo"
+                          className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isAdminUploadingAttachments}
+                      onClick={() => void submitAdminAttachments(false)}
+                      className="gap-1.5 text-xs cursor-pointer"
+                    >
+                      <Paperclip className="size-3.5" />
+                      {isAdminUploadingAttachments ? "Enviando..." : `Enviar Público (${adminAttachmentFiles.length})`}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={isAdminUploadingAttachments}
+                      onClick={() => void submitAdminAttachments(true)}
+                      className="gap-1.5 text-xs cursor-pointer"
+                    >
+                      <Shield className="size-3.5" />
+                      {isAdminUploadingAttachments ? "Enviando..." : `Enviar Interno T.I. (${adminAttachmentFiles.length})`}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CARD 4: Área Técnica Interna e Solução */}
+      <Card className="shadow-[var(--shadow-card)] border bg-card border-primary/20 hover-card-premium">
+        <CardHeader className="pb-3 border-b bg-primary/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
+                <Wrench className="size-4 text-primary" /> 4. Diagnóstico Técnico e Resolução (Área da TI)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Registre os dados técnicos para o histórico, relatórios e base de conhecimento.
+              </CardDescription>
+            </div>
+            <Button size="sm" onClick={() => void saveTechnicalData()}>
+              <CheckCircle2 className="size-4 mr-1.5" /> Salvar Dados Técnicos
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Diagnóstico Técnico</Label>
+              <Textarea
+                rows={3}
+                placeholder="Ex: Falha na fonte de alimentação de 500W devido a sobretensão na rede elétrica..."
+                value={technical.diagnosis}
+                onChange={(e) => updateTechnicalForm("diagnosis", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Causa Raiz do Problema</Label>
+              <Textarea
+                rows={3}
+                placeholder="Ex: Desgaste natural de componentes / Instabilidade de energia no setor..."
+                value={technical.rootCause}
+                onChange={(e) => updateTechnicalForm("rootCause", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              Solução Aplicada (Visível ao Solicitante no Encerramento)
+            </Label>
+            <Textarea
+              rows={3}
+              placeholder="Ex: Realizada substituição da fonte por uma nova de 600W 80 Plus e testado o funcionamento por 30 minutos com sucesso."
+              value={technical.solution}
+              onChange={(e) => updateTechnicalForm("solution", e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Peças / Equipamentos Utilizados</Label>
+              <Input
+                placeholder="Ex: Fonte Corsair 600W, Cabo de Força"
+                value={technical.partsUsed}
+                onChange={(e) => updateTechnicalForm("partsUsed", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Tempo Gasto (em Minutos)</Label>
+              <Input
+                type="number"
+                placeholder="Ex: 45"
+                value={technical.timeSpentMinutes}
+                onChange={(e) => updateTechnicalForm("timeSpentMinutes", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Resumo para Relatório</Label>
+              <Input
+                placeholder="Ex: Troca de fonte concluída"
+                value={technical.resolutionSummary}
+                onChange={(e) => updateTechnicalForm("resolutionSummary", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold">Observações Internas (Privadas da TI)</Label>
+            <Textarea
+              rows={2}
+              placeholder="Anotações para a equipe técnica sobre o atendimento..."
+              value={technical.internalNotes}
+              onChange={(e) => updateTechnicalForm("internalNotes", e.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CARD 4.5: Checklist Técnico Operacional e Timeline Visual de SLA */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TechnicalChecklist
           categoryName={getCategoryName(categories, ticket.categoryId)}
-          onPrepared={async (input) => {
-            await registerWhatsappPrepared({
-              ticketId: ticket.id,
-              message: input.message,
-              phoneUsed: input.phoneUsed,
-              statusAtMoment: input.statusAtMoment,
-            });
+          ticketId={ticket.id}
+          onSaveChecklist={async (items, progressPercent) => {
+            const summary = `📋 Checklist operacional atualizado (${progressPercent}%):\n${items.map((i) => `• [x] ${i}`).join("\n")}`;
+            await addComment(ticket.id, summary, true);
           }}
         />
-      </section>
+        <TicketSlaTimeline ticket={ticket} />
+      </div>
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Wrench className="size-4" /> Area tecnica interna
+      {/* CARD 5: Linha do Tempo e Comunicação */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Comentários Públicos e Internos */}
+        <Card className="shadow-[var(--shadow-card)] border bg-card">
+          <CardHeader className="pb-3 border-b bg-muted/10">
+            <CardTitle className="text-base flex items-center gap-2 font-bold">
+              <MessageSquareText className="size-4 text-primary" /> Mensagens e Notas da OS
             </CardTitle>
-            <CardDescription>
-              Diagnostico, causa raiz, solucao, pecas/equipamentos, tempo gasto e observacoes
-              internas.
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label>Diagnostico</Label>
-              <Textarea
-                value={technical.diagnosis}
-                onChange={(event) => updateTechnicalForm("diagnosis", event.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Causa raiz</Label>
-              <Textarea
-                value={technical.rootCause}
-                onChange={(event) => updateTechnicalForm("rootCause", event.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Solucao aplicada</Label>
-              <Textarea
-                value={technical.solution}
-                onChange={(event) => updateTechnicalForm("solution", event.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Pecas/equipamentos usados</Label>
-                <Input
-                  value={technical.partsUsed}
-                  onChange={(event) => updateTechnicalForm("partsUsed", event.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Tempo gasto (min)</Label>
-                <Input
-                  value={technical.timeSpentMinutes}
-                  onChange={(event) => updateTechnicalForm("timeSpentMinutes", event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Observacoes internas</Label>
-              <Textarea
-                value={technical.internalNotes}
-                onChange={(event) => updateTechnicalForm("internalNotes", event.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Resumo de encerramento</Label>
-              <Textarea
-                value={technical.resolutionSummary}
-                onChange={(event) => updateTechnicalForm("resolutionSummary", event.target.value)}
-                rows={2}
-              />
-            </div>
-            <Button onClick={queueSaveTechnical}>
-              <CheckCircle2 className="size-4" /> Salvar dados tecnicos
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="text-base">Comentarios e anexos</CardTitle>
-            <CardDescription>
-              Publico para o solicitante. Interno apenas para TI_ADMIN.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h3 className="font-medium text-sm mb-2 flex items-center gap-2">
-                <MessageSquareText className="size-4" /> Comentarios publicos
-              </h3>
+          <CardContent className="pt-4 space-y-5">
+            {/* Mensagens Públicas */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <MessageSquare className="size-3.5" /> Comunicação com Solicitante
+              </span>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {publicComments.length === 0 ? (
-                  <EmptyState
-                    compact
-                    title="Sem comentarios publicos"
-                    description="Nenhuma mensagem publica registrada."
-                  />
+                  <p className="text-xs text-muted-foreground p-3 border rounded-xl bg-muted/10">
+                    Nenhuma mensagem pública registrada.
+                  </p>
                 ) : (
-                  publicComments.map((entry) => (
-                    <div key={entry.id} className="rounded-xl border p-2 text-sm">
-                      <p className="font-medium">{entry.authorName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(entry.createdAt)}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap">{entry.content}</p>
+                  publicComments.map((c) => (
+                    <div key={c.id} className="rounded-xl border p-3 bg-muted/15 text-xs space-y-1">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>{c.authorName}</span>
+                        <span className="text-[10px] text-muted-foreground">{formatDateTime(c.createdAt)}</span>
+                      </div>
+                      <p className="text-foreground/90 whitespace-pre-wrap">{c.content}</p>
                     </div>
                   ))
                 )}
               </div>
-              <Textarea
-                className="mt-2"
-                value={publicComment}
-                onChange={(event) => setPublicComment(event.target.value)}
-                placeholder="Novo comentario publico"
-                rows={2}
-              />
-              <Button className="mt-2" size="sm" onClick={() => void postPublic()}>
-                <Send className="size-4" /> Comentar publicamente
-              </Button>
+              <div className="flex gap-2">
+                <Input
+                  className="text-xs"
+                  placeholder="Mensagem para o solicitante..."
+                  value={publicComment}
+                  onChange={(e) => setPublicComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void postPublic();
+                  }}
+                />
+                <Button size="sm" onClick={() => void postPublic()}>
+                  <Send className="size-3.5" />
+                </Button>
+              </div>
             </div>
 
-            <div>
-              <h3 className="font-medium text-sm mb-2 flex items-center gap-2">
-                <Shield className="size-4" /> Comentarios internos
-              </h3>
+            {/* Notas Internas da TI */}
+            <div className="space-y-3 border-t pt-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Shield className="size-3.5 text-primary" /> Notas Internas da Equipe de TI
+              </span>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {internalComments.length === 0 ? (
-                  <EmptyState
-                    compact
-                    title="Sem comentarios internos"
-                    description="Nenhum registro interno nesta OS."
-                  />
+                  <p className="text-xs text-muted-foreground p-3 border rounded-xl bg-muted/10">
+                    Nenhuma nota interna registrada.
+                  </p>
                 ) : (
-                  internalComments.map((entry) => (
-                    <div key={entry.id} className="rounded-xl border p-2 text-sm bg-muted/35">
-                      <p className="font-medium">{entry.authorName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(entry.createdAt)}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap">{entry.content}</p>
+                  internalComments.map((c) => (
+                    <div key={c.id} className="rounded-xl border border-primary/20 p-3 bg-primary/5 text-xs space-y-1">
+                      <div className="flex items-center justify-between font-semibold text-primary">
+                        <span>{c.authorName}</span>
+                        <span className="text-[10px] text-muted-foreground">{formatDateTime(c.createdAt)}</span>
+                      </div>
+                      <p className="text-foreground whitespace-pre-wrap">{c.content}</p>
                     </div>
                   ))
                 )}
               </div>
-              <Textarea
-                className="mt-2"
-                value={internalComment}
-                onChange={(event) => setInternalComment(event.target.value)}
-                placeholder="Novo comentario interno"
-                rows={2}
-              />
-              <Button
-                className="mt-2"
-                size="sm"
-                variant="outline"
-                onClick={() => void postInternal()}
-              >
-                <Send className="size-4" /> Comentar internamente
-              </Button>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-sm mb-2">Anexos</h3>
-              {ticket.attachments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sem anexos.</p>
-              ) : (
-                <div className="space-y-1 text-sm">
-                  {ticket.attachments.map((attachment) => (
-                    <p key={attachment.id}>
-                      {attachment.name} ({attachment.sizeKb} KB)
-                      {attachment.internal ? " - interno" : " - publico"}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <div className="space-y-2 mt-2">
+              <div className="flex gap-2">
                 <Input
-                  type="file"
-                  onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                  className="text-xs"
+                  placeholder="Anotação interna da TI..."
+                  value={internalComment}
+                  onChange={(e) => setInternalComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void postInternal();
+                  }}
                 />
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => void submitAttachment(false)}>
-                    <Paperclip className="size-4" /> Anexo publico
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => void submitAttachment(true)}>
-                    <Shield className="size-4" /> Anexo interno
-                  </Button>
-                </div>
+                <Button size="sm" variant="outline" onClick={() => void postInternal()}>
+                  <Send className="size-3.5" />
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
-      </section>
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ClipboardList className="size-4" /> Historico de status
+        {/* Histórico de Status e Auditoria */}
+        <Card className="shadow-[var(--shadow-card)] border bg-card">
+          <CardHeader className="pb-3 border-b bg-muted/10">
+            <CardTitle className="text-base flex items-center gap-2 font-bold">
+              <History className="size-4 text-primary" /> Linha do Tempo e Histórico
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="pt-4 space-y-4">
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {ticket.statusHistory.length === 0 ? (
-                <EmptyState
-                  compact
-                  title="Sem historico"
-                  description="Ainda nao houve alteracoes de status nesta OS."
-                />
+                <p className="text-xs text-muted-foreground p-3 border rounded-xl bg-muted/10">
+                  Nenhuma alteração de status registrada até o momento.
+                </p>
               ) : (
-                ticket.statusHistory.map((entry) => (
-                  <div key={entry.id} className="rounded-xl border p-3 text-sm">
-                    <p className="font-medium">{statusLabel[entry.status]}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {entry.changedByName} - {formatDateTime(entry.createdAt)}
-                    </p>
-                    {entry.note && <p className="text-sm mt-1">{entry.note}</p>}
+                ticket.statusHistory.map((item, index) => (
+                  <div key={item.id} className="relative pl-6 pb-4 border-l last:border-l-0 border-primary/30 text-xs">
+                    <div className="absolute -left-1.5 top-0 size-3 rounded-full bg-primary border-2 border-background" />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-foreground">
+                        {statusLabel[item.status]}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {formatDateTime(item.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground mt-0.5">Por: {item.changedByName}</p>
+                    {item.note && (
+                      <p className="mt-1 text-foreground/90 bg-muted/20 p-2 rounded-lg border text-[11px] whitespace-pre-wrap">
+                        {item.note}
+                      </p>
+                    )}
                   </div>
                 ))
               )}
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        <Card className="shadow-[var(--shadow-card)]">
-          <CardHeader>
-            <CardTitle className="text-base">Auditoria resumida</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {auditRows.length === 0 ? (
-                <EmptyState
-                  compact
-                  title="Sem registros de auditoria"
-                  description="Nao houve alteracoes administrativas registradas."
-                />
-              ) : (
-                auditRows.map((row) => (
-                  <div key={row.id} className="rounded-xl border p-3 text-sm">
-                    <p className="font-medium">
-                      {row.userName} alterou {row.field}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(row.createdAt)}</p>
-                    <p className="text-xs mt-1">Antes: {row.before}</p>
-                    <p className="text-xs">Depois: {row.after}</p>
-                  </div>
-                ))
-              )}
+      {/* Painel do WhatsApp */}
+      <WhatsAppMessagePanel
+        ticket={ticket}
+        assigneeName={getUserName(users, ticket.assigneeId)}
+        departmentName={getDepartmentName(departments, ticket.departmentId)}
+        branchName={getBranchName(branches, ticket.branchId)}
+        categoryName={getCategoryName(categories, ticket.categoryId)}
+        onPrepared={async (input) => {
+          await registerWhatsappPrepared({
+            ticketId: ticket.id,
+            message: input.message,
+            phoneUsed: input.phoneUsed,
+            statusAtMoment: input.statusAtMoment,
+          });
+        }}
+      />
+
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      {/* CENTRAL DE AÇÕES INFERIOR (BOTTOM ACTION HUB)                          */}
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      <div className="rounded-3xl border-2 border-primary/30 bg-card/95 backdrop-blur shadow-2xl p-6 space-y-5 animate-in slide-in-from-bottom-6 duration-300">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" /> Central de Ações e Fluxo de Atendimento
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Execute as ações operacionais da Ordem de Serviço com um clique.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs font-semibold gap-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+              onClick={() => setIsSignatureModalOpen(true)}
+            >
+              <PenTool className="size-3.5" /> Assinatura Digital
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs font-semibold gap-1.5"
+              onClick={() => setIsEditModalOpen(true)}
+            >
+              <Edit3 className="size-3.5" /> Editar Dados da OS
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs font-semibold gap-1.5 text-primary"
+              onClick={() => setIsExtendSlaOpen(true)}
+            >
+              <Clock className="size-3.5" /> Prorrogar Prazo (SLA)
+            </Button>
+          </div>
+        </div>
+
+        {/* Grade de Botões de Ação de Status */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+          <Button
+            variant={ticket.status === "EM_ATENDIMENTO" ? "default" : "outline"}
+            className={cn(
+              "h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 transition-all",
+              ticket.status === "EM_ATENDIMENTO" && "bg-blue-600 hover:bg-blue-700 shadow-md",
+            )}
+            onClick={() => queueStatusChange("EM_ATENDIMENTO")}
+          >
+            <span>▶️ Em Atendimento</span>
+          </Button>
+
+          <Button
+            variant={ticket.status === "AGUARDANDO_USUARIO" ? "default" : "outline"}
+            className={cn(
+              "h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 transition-all",
+              ticket.status === "AGUARDANDO_USUARIO" && "bg-amber-600 hover:bg-amber-700 shadow-md",
+            )}
+            onClick={() => queueStatusChange("AGUARDANDO_USUARIO")}
+          >
+            <span>⏸️ Aguardar Usuário</span>
+          </Button>
+
+          <Button
+            variant={ticket.status === "AGUARDANDO_PECA" ? "default" : "outline"}
+            className={cn(
+              "h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 transition-all",
+              ticket.status === "AGUARDANDO_PECA" && "bg-amber-600 hover:bg-amber-700 shadow-md",
+            )}
+            onClick={() => queueStatusChange("AGUARDANDO_PECA")}
+          >
+            <span>📦 Aguardar Peça</span>
+          </Button>
+
+          <Button
+            variant={ticket.status === "RESOLVIDO" ? "default" : "outline"}
+            className={cn(
+              "h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 transition-all",
+              ticket.status === "RESOLVIDO" && "bg-emerald-600 hover:bg-emerald-700 shadow-md",
+            )}
+            onClick={() => queueStatusChange("RESOLVIDO")}
+          >
+            <span>✅ Resolver OS</span>
+          </Button>
+
+          <Button
+            variant={ticket.status === "FINALIZADO" ? "default" : "outline"}
+            className={cn(
+              "h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 transition-all",
+              ticket.status === "FINALIZADO" && "bg-emerald-700 hover:bg-emerald-800 shadow-md",
+            )}
+            onClick={() => queueStatusChange("FINALIZADO")}
+          >
+            <span>🎉 Finalizar OS</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 hover:bg-muted"
+            onClick={() => queueStatusChange("REABERTO")}
+          >
+            <span>🔄 Reabrir OS</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-12 flex flex-col items-center justify-center text-xs font-bold gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+            onClick={() => queueStatusChange("CANCELADO")}
+          >
+            <span>❌ Cancelar OS</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────────────── */}
+      {/* MODAIS                                                                */}
+      {/* ───────────────────────────────────────────────────────────────────── */}
+
+      {/* Modal de Prorrogação de Prazo (SLA) */}
+      <Dialog open={isExtendSlaOpen} onOpenChange={setIsExtendSlaOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="size-5 text-primary" /> Prorrogar Prazo de Resolução (SLA)
+            </DialogTitle>
+            <DialogDescription>
+              Aumente o tempo limite para conclusão desta OS devido a situações atípicas (ex: aguardo de peças ou aprovação).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold">Opções Rápidas de Extensão</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { hours: 24, label: "+24h (1d)" },
+                  { hours: 48, label: "+48h (2d)" },
+                  { hours: 72, label: "+72h (3d)" },
+                  { hours: 168, label: "+7 dias" },
+                ].map((item) => (
+                  <button
+                    key={item.hours}
+                    type="button"
+                    onClick={() => setSlaExtendHours(item.hours)}
+                    className={cn(
+                      "py-2 px-3 rounded-xl border text-xs font-bold transition",
+                      slaExtendHours === item.hours
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-background hover:bg-muted",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </section>
 
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Quantidade de Horas a Adicionar</Label>
+              <Input
+                type="number"
+                min={1}
+                value={slaExtendHours}
+                onChange={(e) => setSlaExtendHours(Number(e.target.value || 1))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Justificativa / Motivo da Prorrogação *</Label>
+              <Textarea
+                rows={3}
+                placeholder="Ex: Aguardando entrega de nova placa de rede solicitada ao fornecedor..."
+                value={slaExtendReason}
+                onChange={(e) => setSlaExtendReason(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">
+                A justificativa será gravada no histórico da OS e na auditoria do sistema.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExtendSlaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleExtendSla()}>Confirmar Prorrogação</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Edição dos Dados da OS */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="size-5 text-primary" /> Editar Dados da Ordem de Serviço
+            </DialogTitle>
+            <DialogDescription>
+              Ao alterar a categoria, o prazo de SLA é recalculado automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs font-bold">Título da OS</Label>
+                <Input
+                  value={ticketForm.title}
+                  onChange={(e) => updateTicketForm("title", e.target.value)}
+                  placeholder="Resumo do problema"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Nome do Solicitante *</Label>
+                <Input
+                  value={ticketForm.requesterName}
+                  onChange={(e) => updateTicketForm("requesterName", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Telefone / WhatsApp *</Label>
+                <Input
+                  value={ticketForm.requesterPhone}
+                  onChange={(e) => updateTicketForm("requesterPhone", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Setor *</Label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={ticketForm.departmentId}
+                  onChange={(e) => updateTicketForm("departmentId", e.target.value)}
+                >
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Filial / Local *</Label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={ticketForm.branchId}
+                  onChange={(e) => updateTicketForm("branchId", e.target.value)}
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {formatBranchName(b.name)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Categoria (Recalcula SLA)</Label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={ticketForm.categoryId}
+                  onChange={(e) => {
+                    updateTicketForm("categoryId", e.target.value);
+                    updateTicketForm("subcategory", "");
+                  }}
+                >
+                  <option value="">Sem Categoria (SLA Padrão 24h)</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (SLA: {c.defaultSlaHours}h)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Subcategoria</Label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={ticketForm.subcategory}
+                  onChange={(e) => updateTicketForm("subcategory", e.target.value)}
+                  disabled={availableSubcategories.length === 0}
+                >
+                  <option value="">Selecione uma subcategoria...</option>
+                  {availableSubcategories.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Equipamento</Label>
+                <Input
+                  value={ticketForm.equipment}
+                  onChange={(e) => updateTicketForm("equipment", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Patrimônio</Label>
+                <Input
+                  value={ticketForm.assetTag}
+                  onChange={(e) => updateTicketForm("assetTag", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Descrição do Problema *</Label>
+              <Textarea
+                rows={4}
+                value={ticketForm.description}
+                onChange={(e) => updateTicketForm("description", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void saveTicketEdits()}>Salvar Alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Aguardar Usuário */}
       <Dialog open={waitingReasonOpen} onOpenChange={setWaitingReasonOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>O que voce precisa que o solicitante responda?</DialogTitle>
+            <DialogTitle>O que você precisa que o solicitante responda?</DialogTitle>
             <DialogDescription>
-              Este texto e obrigatorio para mudar a OS para \"Aguardando resposta do solicitante\".
-              Ele sera salvo no historico e usado na comunicacao.
+              Este texto é obrigatório para mover para "Aguardando resposta do solicitante". Ele
+              ficará visível em destaque para o usuário.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Mensagem aguardada</Label>
+            <Label>Mensagem para o Solicitante</Label>
             <Textarea
               rows={4}
               value={waitingReason}
               onChange={(event) => setWaitingReason(event.target.value)}
-              placeholder="Ex: Envie uma foto da mensagem de erro para seguirmos com o atendimento."
+              placeholder="Ex: Envie uma foto do erro ou confirme o melhor horário para acesso remoto."
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setWaitingReasonOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={confirmWaitingReason}>Salvar e continuar</Button>
+            <Button onClick={confirmWaitingReason}>Salvar e Mover Status</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Confirmação Genérica */}
       <ConfirmActionDialog
         action={confirmAction}
         loading={confirmingAction}
@@ -1521,26 +2266,36 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
           <DialogHeader>
             <DialogTitle>Substituir Periférico</DialogTitle>
             <DialogDescription>
-              Selecione um periférico disponível em estoque para substituir o componente "{activeReplacementComp?.name}" ({activeReplacementComp?.code}).
+              Selecione um item disponível em estoque para substituir "
+              {activeReplacementComp?.name}" ({activeReplacementComp?.code}).
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-4 space-y-4">
             <div className="space-y-1">
-              <Label>Equipamento de Destino (PC)</Label>
+              <Label>Equipamento Principal (PC)</Label>
               <Input value={assetDetail?.name || ""} disabled className="bg-muted" />
             </div>
 
             <div className="space-y-1">
-              <Label>Componente Atual (Substituído)</Label>
-              <Input value={activeReplacementComp ? `${activeReplacementComp.name} (${activeReplacementComp.code})` : ""} disabled className="bg-muted" />
+              <Label>Item Substituído</Label>
+              <Input
+                value={
+                  activeReplacementComp
+                    ? `${activeReplacementComp.name} (${activeReplacementComp.code})`
+                    : ""
+                }
+                disabled
+                className="bg-muted"
+              />
             </div>
 
             <div className="space-y-1">
               <Label>Novo Periférico (Em Estoque) *</Label>
               {!stockAssets || stockAssets.length === 0 ? (
                 <div className="text-sm text-destructive border rounded-md p-3 bg-destructive/5">
-                  Nenhum item do tipo "{activeReplacementComp?.assetType?.name || 'periférico'}" disponível em estoque (status ESTOQUE). Cadastre novos ativos no estoque primeiro.
+                  Nenhum item do tipo "{activeReplacementComp?.assetType?.name || "periférico"}"
+                  disponível em estoque.
                 </div>
               ) : (
                 <select
@@ -1551,7 +2306,8 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
                   <option value="">Selecione um ativo em estoque...</option>
                   {stockAssets.map((asset) => (
                     <option key={asset.id} value={asset.id}>
-                      {asset.code} - {asset.name} {asset.serialNumber ? `(S/N: ${asset.serialNumber})` : ""}
+                      {asset.code} - {asset.name}{" "}
+                      {asset.serialNumber ? `(S/N: ${asset.serialNumber})` : ""}
                     </option>
                   ))}
                 </select>
@@ -1560,22 +2316,33 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsReplacingOpen(false);
-              setActiveReplacementComp(null);
-              setSelectedReplacementAssetId("");
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsReplacingOpen(false);
+                setActiveReplacementComp(null);
+                setSelectedReplacementAssetId("");
+              }}
+            >
               Cancelar
             </Button>
             <Button
               onClick={() => void handleConfirmSwap()}
               disabled={!selectedReplacementAssetId}
             >
-              Confirmar Substituição
+              Confirmar Troca
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DigitalSignatureModal
+        open={isSignatureModalOpen}
+        onOpenChange={setIsSignatureModalOpen}
+        ticketProtocol={ticket.protocol}
+        requesterName={ticket.requesterName}
+        onConfirmSignature={handleConfirmSignature}
+      />
     </div>
   );
 }
@@ -1595,7 +2362,7 @@ function ConfirmActionDialog({
     <AlertDialog open={Boolean(action)} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{action?.title ?? "Confirmar acao"}</AlertDialogTitle>
+          <AlertDialogTitle>{action?.title ?? "Confirmar ação"}</AlertDialogTitle>
           <AlertDialogDescription>{action?.description ?? ""}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1617,42 +2384,5 @@ function ConfirmActionDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
-}
-
-function FieldInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <p>
-      <strong>{label}:</strong> {value}
-    </p>
-  );
-}
-
-function FieldSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      <select
-        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.value || option.label} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }

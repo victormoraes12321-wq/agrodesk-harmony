@@ -6,7 +6,8 @@ import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   server: {
-    port: 3000,
+    port: 3001,
+    host: true,
     proxy: {
       "/api": {
         target: "http://localhost:3333",

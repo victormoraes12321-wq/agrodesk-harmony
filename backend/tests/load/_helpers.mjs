@@ -6,7 +6,7 @@ export const API_BASE_URL = (
   process.env.LOAD_API_BASE_URL ?? "http://127.0.0.1:3333/api/v1"
 ).replace(/\/+$/, "");
 export const DEFAULT_PASSWORD = process.env.LOAD_TEST_PASSWORD ?? "AgroDeskCarga@2026";
-export const INITIAL_PASSWORD = process.env.LOAD_TEST_INITIAL_PASSWORD ?? "AgroDesk@2026";
+export const INITIAL_PASSWORD = process.env.LOAD_TEST_INITIAL_PASSWORD ?? "MudaSenha@123";
 export const RESULTS_DIR = path.join(process.cwd(), "tests", "load", "results");
 
 export function sleep(ms) {
@@ -81,7 +81,7 @@ export async function requestApi(endpoint, options = {}) {
 export async function login(email, password = DEFAULT_PASSWORD) {
   const response = await requestApi("/auth/login", {
     method: "POST",
-    body: { email, password },
+    body: { username: email, password },
   });
   return response;
 }

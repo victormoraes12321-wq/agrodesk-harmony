@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Download, HardDriveDownload, Save } from "lucide-react";
+import { Download, HardDriveDownload, MessageCircle, Phone, RotateCcw, Save, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -216,6 +216,9 @@ function SettingsPage() {
         </Card>
       </div>
 
+      {/* Editor de Templates do WhatsApp */}
+      <WhatsAppTemplateEditor />
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="shadow-[var(--shadow-card)]">
           <CardHeader>
@@ -276,11 +279,11 @@ function SettingsPage() {
 
       <section className="rounded-2xl border bg-card p-3 sm:p-4 grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:gap-3 sticky bottom-3 shadow-[var(--shadow-card)]">
         <Button onClick={() => void save()} className="w-full sm:w-auto">
-          <Save className="size-4" /> Salvar configuracoes
+          <Save className="size-4" /> Salvar configurações
         </Button>
         <Button className="w-full sm:w-auto" variant="outline" asChild>
           <Link to="/app/relatorios">
-            <Download className="size-4" /> Exportar CSV em relatorios
+            <Download className="size-4" /> Exportar Relatórios
           </Link>
         </Button>
         <Button
@@ -290,9 +293,144 @@ function SettingsPage() {
             toast.info("Execute o backup do PostgreSQL no servidor conforme BACKUP_RESTORE.md.")
           }
         >
-          <HardDriveDownload className="size-4" /> Orientacoes de backup
+          <HardDriveDownload className="size-4" /> Orientações de backup
         </Button>
       </section>
     </div>
+  );
+}
+
+const DEFAULT_WA_TEMPLATE = `Olá, *{solicitante}*!\n\n📌 *ATUALIZAÇÃO DA OS #{protocolo}*\n\n📋 *Assunto:* {titulo}\n🏢 *Unidade/Setor:* {filial} | {setor}\n🏷️ *Categoria:* {categoria}\n\nℹ️ *Status Atual:* {status}\n👨‍💻 *Técnico:* {tecnico}\n\n— *AgroDesk TI* | Central de Suporte`;
+
+function WhatsAppTemplateEditor() {
+  const [template, setTemplate] = useState(() => {
+    return localStorage.getItem("agrodesk_custom_wa_template") || DEFAULT_WA_TEMPLATE;
+  });
+
+  const availableTags = [
+    { label: "Protocolo", tag: "{protocolo}" },
+    { label: "Solicitante", tag: "{solicitante}" },
+    { label: "Título da OS", tag: "{titulo}" },
+    { label: "Status", tag: "{status}" },
+    { label: "Técnico", tag: "{tecnico}" },
+    { label: "Solução", tag: "{solucao}" },
+    { label: "Setor", tag: "{setor}" },
+    { label: "Filial", tag: "{filial}" },
+  ];
+
+  const insertTag = (tag: string) => {
+    setTemplate((prev) => prev + " " + tag);
+  };
+
+  const handleSaveTemplate = () => {
+    localStorage.setItem("agrodesk_custom_wa_template", template);
+    toast.success("Modelo de WhatsApp salvo com sucesso!");
+  };
+
+  const handleResetTemplate = () => {
+    setTemplate(DEFAULT_WA_TEMPLATE);
+    localStorage.removeItem("agrodesk_custom_wa_template");
+    toast.success("Modelo restaurado para o padrão do sistema.");
+  };
+
+  const previewMessage = template
+    .replace(/{protocolo}/g, "OS-2026-00042")
+    .replace(/{solicitante}/g, "Victor Moraes")
+    .replace(/{titulo}/g, "Computador não liga na Fazenda")
+    .replace(/{status}/g, "🟢 EM ATENDIMENTO")
+    .replace(/{tecnico}/g, "Victor (TI)")
+    .replace(/{solucao}/g, "Fonte substituída por nova de 600W")
+    .replace(/{setor}/g, "Administrativo")
+    .replace(/{filial}/g, "Matriz");
+
+  return (
+    <Card className="shadow-[var(--shadow-card)] border-emerald-600/20">
+      <CardHeader className="pb-3 border-b bg-emerald-500/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="size-8 rounded-lg bg-emerald-600/10 flex items-center justify-center text-emerald-600">
+              <MessageCircle className="size-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-bold text-foreground">
+                Editor de Modelos do WhatsApp
+              </CardTitle>
+              <CardDescription>
+                Personalize o modelo de texto pré-formatado enviado aos colaboradores via WhatsApp.
+              </CardDescription>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleResetTemplate}
+              className="text-xs h-7 text-muted-foreground hover:text-foreground gap-1"
+            >
+              <RotateCcw className="size-3" /> Restaurar Padrão
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveTemplate}
+              className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+            >
+              <Save className="size-3" /> Salvar Modelo
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Editor Side */}
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs font-semibold text-muted-foreground block mb-1.5">
+              Inserir Tags Dinâmicas (clique para adicionar):
+            </Label>
+            <div className="flex flex-wrap gap-1.5">
+              {availableTags.map((t) => (
+                <button
+                  key={t.tag}
+                  type="button"
+                  onClick={() => insertTag(t.tag)}
+                  className="px-2 py-1 text-[11px] font-mono font-medium rounded-md bg-muted/60 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 border transition-colors"
+                >
+                  +{t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold">Corpo da Mensagem</Label>
+            <Textarea
+              rows={8}
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className="font-mono text-xs leading-relaxed"
+              placeholder="Digite o modelo de mensagem..."
+            />
+          </div>
+        </div>
+
+        {/* Live Smartphone Preview Side */}
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Smartphone className="size-3.5 text-emerald-600" />
+            Pré-visualização em Tempo Real (WhatsApp)
+          </Label>
+
+          <div className="rounded-2xl border bg-slate-900/5 dark:bg-slate-950 p-4 min-h-[220px] flex items-center justify-center">
+            <div className="w-full max-w-sm rounded-2xl bg-[#dcf8c6] dark:bg-[#054d44] text-[#111b21] dark:text-[#e9edef] p-3 shadow-md border text-xs whitespace-pre-wrap leading-relaxed relative">
+              <div className="text-[11px]">{previewMessage}</div>
+              <div className="text-[9px] text-right text-muted-foreground/80 mt-1 font-mono">
+                10:45 ✓✓
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

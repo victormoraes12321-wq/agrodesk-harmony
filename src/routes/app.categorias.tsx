@@ -214,22 +214,39 @@ function CategoriesPage() {
                 }
               />
             </div>
+            <div className="space-y-2">
+              <Label>SLA Padrão (Horas de Prazo)</Label>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {[2, 4, 8, 24, 48, 72].map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setDraft((prev) => ({ ...prev, defaultSlaHours: h }))}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
+                      draft.defaultSlaHours === h
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/40 hover:bg-muted"
+                    }`}
+                  >
+                    {h}h {h === 8 ? "(1 dia útil)" : h === 24 ? "(24h)" : h === 48 ? "(2 dias)" : ""}
+                  </button>
+                ))}
+              </div>
+              <Input
+                type="number"
+                min={1}
+                value={draft.defaultSlaHours}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    defaultSlaHours: Number(event.target.value || 1),
+                  }))
+                }
+              />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>SLA padrao (h)</Label>
-                <Input
-                  type="number"
-                  value={draft.defaultSlaHours}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      defaultSlaHours: Number(event.target.value || 0),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Prioridade padrao</Label>
+                <Label>Prioridade Padrão</Label>
                 <select
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   value={draft.defaultPriority}

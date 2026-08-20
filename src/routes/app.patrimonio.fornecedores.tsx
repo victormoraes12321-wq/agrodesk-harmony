@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { maskPhone } from '@/lib/format';
 
 export const Route = createFileRoute('/app/patrimonio/fornecedores')({
   component: FornecedoresPage,
@@ -245,8 +246,8 @@ function FornecedoresPage() {
                 <Input
                   id="phone"
                   value={draft.phone}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, phone: e.target.value }))}
-                  placeholder="Ex: (11) 99999-9999"
+                  onChange={(e) => setDraft((prev) => ({ ...prev, phone: maskPhone(e.target.value) }))}
+                  placeholder="(00) 00000-0000"
                 />
               </div>
               <div className="space-y-1">

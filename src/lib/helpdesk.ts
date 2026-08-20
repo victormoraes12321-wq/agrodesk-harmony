@@ -36,14 +36,38 @@ export function getUserName(users: User[], id?: string): string {
   return byIdName(users, id);
 }
 
+export function isSlaPaused(status: TicketStatus): boolean {
+  return (
+    status === "AGUARDANDO_PECA" ||
+    status === "AGUARDANDO_USUARIO" ||
+    status === "RESOLVIDO" ||
+    status === "FINALIZADO" ||
+    status === "CANCELADO"
+  );
+}
+
 export function isSlaOverdue(ticket: Ticket): boolean {
-  if (ticket.closedAt) return false;
+  if (isSlaPaused(ticket.status)) return false;
+  if (ticket.closedAt || ticket.resolvedAt) return false;
+  if (ticket.slaDueAt) {
+    return new Date(ticket.slaDueAt).getTime() < Date.now();
+  }
   const elapsedHours = (Date.now() - new Date(ticket.createdAt).getTime()) / 3600000;
   return elapsedHours > ticket.slaHours;
 }
 
 export function isSlaNear(ticket: Ticket): boolean {
-  if (ticket.closedAt) return false;
+  if (isSlaPaused(ticket.status)) return false;
+  if (ticket.closedAt || ticket.resolvedAt) return false;
+  if (ticket.slaDueAt) {
+    const dueTime = new Date(ticket.slaDueAt).getTime();
+    const now = Date.now();
+    const createdTime = new Date(ticket.createdAt).getTime();
+    const totalDuration = Math.max(3600000, dueTime - createdTime);
+    const elapsed = now - createdTime;
+    const ratio = elapsed / totalDuration;
+    return ratio >= 0.75 && ratio <= 1.0;
+  }
   const elapsedHours = (Date.now() - new Date(ticket.createdAt).getTime()) / 3600000;
   return elapsedHours >= ticket.slaHours * 0.75 && elapsedHours <= ticket.slaHours;
 }

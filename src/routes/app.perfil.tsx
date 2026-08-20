@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { Save, ShieldCheck, UserCircle2 } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Save, ShieldCheck, UserCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ import { PageLoading } from "@/components/ui/page-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { formatBranchName } from "@/lib/helpdesk";
+import { maskPhone } from "@/lib/format";
 import { useApp } from "@/lib/store";
 import { profileSchema } from "@/lib/validation";
 
@@ -33,8 +34,16 @@ type ProfileForm = {
 };
 
 function ProfilePage() {
-  const { currentUser, departments, branches, updateProfile } = useApp();
+  const { currentUser, departments, branches, updateProfile, changeMyPassword } = useApp();
   const loading = usePageLoading(160);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const initialValues = useMemo<ProfileForm>(
     () => ({
@@ -98,6 +107,35 @@ function ProfilePage() {
     }
   };
 
+  const onChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!currentPassword) {
+      toast.error("Informe sua senha atual.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("A nova senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("A confirmação de senha não confere com a nova senha.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await changeMyPassword(currentPassword, newPassword);
+      toast.success("Senha alterada com sucesso!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao alterar a senha.";
+      toast.error(message);
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const defaultDepartment = departments.find((item) => item.id === form.departmentId)?.name ?? "-";
   const defaultBranch = formatBranchName(
     branches.find((item) => item.id === form.branchId)?.name ?? "-",
@@ -125,7 +163,7 @@ function ProfilePage() {
               onSubmit={(event) => void onSave(event)}
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="name">Nome completo</Label>
                 <Input
                   id="name"
@@ -136,11 +174,22 @@ function ProfilePage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="username">Nome de usuário (Login)</Label>
+                <Input
+                  id="username"
+                  value={currentUser.username || currentUser.name}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
                 <Input
                   id="phone"
                   value={form.phone}
-                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                  onChange={(event) => setForm((prev) => ({ ...prev, phone: maskPhone(event.target.value) }))}
+                  placeholder="(00) 00000-0000"
                   required
                 />
               </div>
@@ -151,8 +200,9 @@ function ProfilePage() {
                   id="whatsapp"
                   value={form.whatsapp}
                   onChange={(event) =>
-                    setForm((prev) => ({ ...prev, whatsapp: event.target.value }))
+                    setForm((prev) => ({ ...prev, whatsapp: maskPhone(event.target.value) }))
                   }
+                  placeholder="(00) 00000-0000"
                 />
               </div>
 
@@ -168,14 +218,13 @@ function ProfilePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="email">E-mail (opcional)</Label>
                 <Input
                   id="email"
                   type="email"
                   value={form.email}
                   onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                  required
-                  readOnly
+                  placeholder="seuemail@empresa.com"
                 />
               </div>
 
@@ -280,6 +329,94 @@ function ProfilePage() {
           </CardContent>
         </Card>
       </section>
+
+      {/* Alterar Senha */}
+      <Card className="shadow-[var(--shadow-card)] max-w-2xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <KeyRound className="size-5 text-primary" /> Alterar Minha Senha
+          </CardTitle>
+          <CardDescription>
+            Atualize sua senha de acesso ao AgroDesk TI com segurança.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(event) => void onChangePassword(event)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Senha atual</Label>
+              <div className="relative">
+                <Input
+                  id="currentPassword"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Digite sua senha atual"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showCurrentPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">Nova senha</Label>
+                <div className="relative">
+                  <Input
+                    id="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 8 caracteres"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita a nova senha"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button type="submit" disabled={passwordSaving} className="min-w-44">
+                <Save className="size-4" /> {passwordSaving ? "Salvando..." : "Alterar senha"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

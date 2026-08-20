@@ -1,4 +1,4 @@
-﻿import { ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiPropertyOptional } from "@nestjs/swagger";
 import { IsDateString, IsInt, IsOptional, Min } from "class-validator";
 
 export class UpdateSlaDto {
@@ -9,7 +9,17 @@ export class UpdateSlaDto {
   slaHours?: number;
 
   @ApiPropertyOptional()
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  extendHours?: number;
+
+  @ApiPropertyOptional()
   @IsDateString()
   @IsOptional()
   slaDueAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  reason?: string;
 }

@@ -28,6 +28,11 @@ export interface Asset {
   value?: number;
   status: string;
   hostname?: string;
+  processor?: string;
+  ram?: string;
+  disk?: string;
+  brand?: string;
+  model?: string;
   supplierId?: string;
   assetTypeId: string;
   departmentId?: string;
@@ -41,6 +46,8 @@ export interface Asset {
   user?: any;
   parent?: Asset;
   components?: Asset[];
+  movements?: any[];
+  maintenances?: any[];
 }
 
 export interface AssetMovement {

@@ -114,7 +114,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: "Sistema interno de chamados de TI para operacao do agronegocio.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

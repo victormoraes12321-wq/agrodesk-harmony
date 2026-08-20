@@ -16,7 +16,8 @@ export type TicketPriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username?: string;
+  email?: string;
   phone: string;
   whatsapp?: string;
   extension?: string;
@@ -137,8 +138,10 @@ export interface Ticket {
   timeSpentMinutes?: number;
   internalNotes?: string;
   slaHours: number;
+  slaDueAt?: string;
   createdAt: string;
   updatedAt: string;
+  resolvedAt?: string;
   closedAt?: string;
   rating?: number;
   ratingComment?: string;

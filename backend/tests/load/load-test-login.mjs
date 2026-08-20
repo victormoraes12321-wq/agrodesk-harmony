@@ -25,7 +25,7 @@ async function main() {
     const user = testUsers[index];
     const result = await requestApi("/auth/login", {
       method: "POST",
-      body: { email: user.email, password: DEFAULT_PASSWORD },
+      body: { username: user.email, password: DEFAULT_PASSWORD },
     });
     addMetricResult(validLoginMetrics, result, { email: user.email });
     return result;
@@ -59,7 +59,7 @@ async function main() {
     const user = testUsers[index];
     const result = await requestApi("/auth/login", {
       method: "POST",
-      body: { email: user.email, password: "senha-errada" },
+      body: { username: user.email, password: "senha-errada" },
     });
     addMetricResult(wrongPasswordMetrics, result, { email: user.email });
   });
@@ -73,7 +73,7 @@ async function main() {
 
   const inactiveLoginResult = await requestApi("/auth/login", {
     method: "POST",
-    body: { email: inactiveTarget.email, password: DEFAULT_PASSWORD },
+    body: { username: inactiveTarget.email, password: DEFAULT_PASSWORD },
   });
 
   const reactivate = await requestApi(`/users/${inactiveTarget.id}/active`, {

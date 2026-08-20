@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { NotificationType, TicketPriority, TicketStatus } from "@prisma/client";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { AuthUser } from "../../common/interfaces/auth-user.interface";
@@ -59,7 +59,15 @@ export class SlaService {
   findOverdue() {
     return this.prisma.ticket.findMany({
       where: {
-        status: { notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED] },
+        status: {
+          notIn: [
+            TicketStatus.CLOSED,
+            TicketStatus.CANCELED,
+            TicketStatus.RESOLVED,
+            TicketStatus.WAITING_PARTS_OR_THIRD_PARTY,
+            TicketStatus.WAITING_USER,
+          ],
+        },
         slaDueAt: { lt: new Date() },
       },
       orderBy: { slaDueAt: "asc" },
@@ -71,7 +79,15 @@ export class SlaService {
     const until = new Date(Date.now() + minutes * 60000);
     return this.prisma.ticket.findMany({
       where: {
-        status: { notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED] },
+        status: {
+          notIn: [
+            TicketStatus.CLOSED,
+            TicketStatus.CANCELED,
+            TicketStatus.RESOLVED,
+            TicketStatus.WAITING_PARTS_OR_THIRD_PARTY,
+            TicketStatus.WAITING_USER,
+          ],
+        },
         slaDueAt: { gte: now, lte: until },
       },
       orderBy: { slaDueAt: "asc" },

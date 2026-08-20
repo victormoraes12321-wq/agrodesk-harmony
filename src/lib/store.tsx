@@ -10,7 +10,14 @@ import {
 import { toast } from "sonner";
 
 import { AppContext } from "@/lib/app-context";
-import { login as authLogin, logout as authLogout, getCurrentUser } from "@/services/authService";
+import {
+  login as authLogin,
+  logout as authLogout,
+  register as authRegister,
+  getCurrentUser,
+  saveStoredUser,
+} from "@/services/authService";
+import type { RegisterInput } from "@/services/helpdesk-api";
 import { setSessionExpiredHandler } from "@/services/api";
 import {
   addCommentApi,
@@ -22,6 +29,7 @@ import {
   createDepartmentApi,
   createTicketApi,
   createUserApi,
+  fetchMeApi,
   finalizeTicketApi,
   getReportsOverviewApi,
   getSettingsApi,
@@ -50,6 +58,7 @@ import {
   updateSettingsApi,
   updateTicketFieldsApi,
   updateTicketPriorityApi,
+  updateTicketSlaApi,
   updateTicketStatusApi,
   updateTicketTechnicalApi,
   updateUserApi,
@@ -87,10 +96,15 @@ export interface AppState {
   settings: GlobalSettings;
   reportsOverview: ReportsOverview | null;
   login: (username: string, password: string) => Promise<User | null>;
+  register: (input: RegisterInput) => Promise<User | null>;
   logout: () => Promise<void>;
   refreshAppData: () => Promise<void>;
   refreshReports: (query: ReportsQuery) => Promise<ReportsOverview | null>;
   updateProfile: (patch: Partial<User>) => Promise<void>;
+  extendTicketSla: (
+    id: string,
+    input: { extendHours?: number; slaDueAt?: string; reason?: string },
+  ) => Promise<Ticket>;
   createTicket: (input: CreateTicketInput, attachments?: File[]) => Promise<Ticket>;
   updateTicket: (
     id: string,
@@ -252,7 +266,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshCoreData = useCallback(async (user: User) => {
     const isAdmin = user.role === "TI_ADMIN";
 
-    const [departments, branches, categories, tickets, notifications, settings, users, audit] =
+    const [departments, branches, categories, tickets, notifications, settings, users, audit, freshMe] =
       await Promise.all([
         listDepartmentsApi(),
         listBranchesApi(),
@@ -262,10 +276,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isAdmin ? getSettingsApi() : Promise.resolve({ ...DEFAULT_SETTINGS }),
         isAdmin ? listUsersApi() : Promise.resolve<User[]>([user]),
         isAdmin ? listAuditApi() : Promise.resolve<AuditLog[]>([]),
+        fetchMeApi().catch(() => user),
       ]);
 
+    const activeMe = freshMe || user;
+    setCurrentUser(activeMe);
+    saveStoredUser(activeMe);
+
     setData({
-      users,
+      users: isAdmin ? users : [activeMe],
       departments,
       branches,
       categories,
@@ -293,10 +312,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!currentUser) return;
 
     try {
-      const [nextTickets, nextNotifications] = await Promise.all([
+      const [nextTickets, nextNotifications, freshMe] = await Promise.all([
         listTicketsApi(),
         listNotificationsApi(),
+        fetchMeApi().catch(() => null),
       ]);
+
+      if (freshMe) {
+        if (
+          freshMe.name !== currentUser.name ||
+          freshMe.email !== currentUser.email ||
+          freshMe.username !== currentUser.username ||
+          freshMe.phone !== currentUser.phone ||
+          freshMe.whatsapp !== currentUser.whatsapp ||
+          freshMe.extension !== currentUser.extension ||
+          freshMe.departmentId !== currentUser.departmentId ||
+          freshMe.branchId !== currentUser.branchId ||
+          freshMe.jobTitle !== currentUser.jobTitle ||
+          freshMe.role !== currentUser.role ||
+          freshMe.active !== currentUser.active ||
+          freshMe.canReceiveTickets !== currentUser.canReceiveTickets
+        ) {
+          setCurrentUser(freshMe);
+          saveStoredUser(freshMe);
+        }
+      }
 
       const prev = dataRef.current;
       const previousTicketIds = new Set(prev.tickets.map((ticket) => ticket.id));
@@ -464,6 +504,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshCoreData],
   );
 
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      setLoading(true);
+      try {
+        const user = await authRegister(input);
+        setCurrentUser(user);
+        setRecentTicketIds([]);
+        try {
+          await refreshCoreData(user);
+        } catch {
+          // Backend data may be unavailable in local demo mode.
+        }
+        return user;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Não foi possível realizar o cadastro. Verifique os dados inseridos.";
+        toast.error(message);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [refreshCoreData],
+  );
+
   const refreshReports = useCallback(async (query: ReportsQuery) => {
     try {
       const overview = await getReportsOverviewApi(query);
@@ -481,6 +548,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!currentUser) return;
       const updated = await updateMyProfileApi(patch);
       setCurrentUser(updated);
+      saveStoredUser(updated);
       setData((prev) => ({
         ...prev,
         users: prev.users.some((user) => user.id === updated.id)
@@ -520,6 +588,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(normalizedPatch, "assigneeId");
       if (hasAssigneeUpdate && normalizedPatch.assigneeId !== existing.assigneeId) {
         await assignTicketApi(id, normalizedPatch.assigneeId);
+        hasTicketMutation = true;
+      }
+
+      if (
+        normalizedPatch.slaHours !== undefined &&
+        normalizedPatch.slaHours !== existing.slaHours
+      ) {
+        await updateTicketSlaApi(id, normalizedPatch.slaHours);
         hasTicketMutation = true;
       }
 
@@ -666,7 +742,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!exists && !initialPassword) {
         throw new Error("Informe uma senha temporaria para criar o usuario.");
       }
-      const saved = exists ? await updateUserApi(user) : await createUserApi(user, initialPassword);
+      const saved = exists
+        ? await updateUserApi(user)
+        : await createUserApi(user, initialPassword || "");
+
+      if (currentUser && currentUser.id === saved.id) {
+        setCurrentUser(saved);
+        saveStoredUser(saved);
+      }
+
       setData((prev) => ({
         ...prev,
         users: prev.users.some((item) => item.id === saved.id)
@@ -674,7 +758,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : [saved, ...prev.users],
       }));
     },
-    [data.users],
+    [currentUser, data.users],
   );
 
   const toggleUserActive = useCallback(
@@ -690,6 +774,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
     },
     [data.users],
+  );
+
+  const extendTicketSla = useCallback(
+    async (id: string, input: { extendHours?: number; slaDueAt?: string; reason?: string }) => {
+      const updated = await updateTicketSlaApi(id, input);
+      applyTicket(updated);
+      await refreshTicketDetails(id);
+      return updated;
+    },
+    [applyTicket, refreshTicketDetails],
   );
 
   const resetUserPassword = useCallback(async (id: string, newPassword: string) => {
@@ -798,9 +892,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings: data.settings,
       reportsOverview,
       login,
+      register,
       logout,
       refreshAppData,
       refreshReports,
+      extendTicketSla,
       updateProfile,
       createTicket,
       updateTicket,
@@ -835,6 +931,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data.users,
       loading,
       login,
+      register,
       logout,
       markAllRead,
       markNotificationRead,
@@ -845,6 +942,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshTicketDetails,
       reportsOverview,
       rateTicket,
+      extendTicketSla,
       registerWhatsappPrepared,
       setNotificationSoundEnabled,
       toggleUserActive,

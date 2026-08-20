@@ -1,5 +1,5 @@
 import { getAccessToken, getRefreshToken } from "@/services/api";
-import { loginApi, logoutApi } from "@/services/helpdesk-api";
+import { loginApi, logoutApi, registerApi, type RegisterInput } from "@/services/helpdesk-api";
 import type { User } from "@/types";
 
 const STORAGE_KEY = "agrodesk-ti-current-user-v1";
@@ -23,13 +23,24 @@ function getStoredUser(): User | null {
   }
 }
 
-function saveUser(user: User) {
+export function saveStoredUser(user: User) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 }
 
+function saveUser(user: User) {
+  saveStoredUser(user);
+}
+
 export async function login(username: string, password: string): Promise<User> {
   const payload = await loginApi(username, password);
+  const user = payload.user;
+  saveUser(user);
+  return user;
+}
+
+export async function register(input: RegisterInput): Promise<User> {
+  const payload = await registerApi(input);
   const user = payload.user;
   saveUser(user);
   return user;

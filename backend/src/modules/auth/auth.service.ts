@@ -7,6 +7,7 @@ import type { StringValue } from "ms";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { LoginDto } from "./dto/login.dto";
+import { RegisterDto } from "./dto/register.dto";
 
 export interface TokenPair {
   accessToken: string;
@@ -21,8 +22,8 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  private buildPayload(id: string, email: string, role: UserRole): AuthUser {
-    return { sub: id, email, role };
+  private buildPayload(id: string, email: string | null, role: UserRole): AuthUser {
+    return { sub: id, email: email ?? "", role };
   }
 
   private async signTokens(payload: AuthUser): Promise<TokenPair> {
@@ -56,70 +57,159 @@ export class AuthService {
   }
 
   async login(input: LoginDto, metadata?: { ip?: string; userAgent?: string }) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        name: {
-          equals: input.username.trim(),
-          mode: "insensitive",
-        },
-      },
-    });
-
-    if (!user || !user.isActive) {
-      await this.prisma.auditLog.create({
-        data: {
-          entity: "Auth",
-          action: "LOGIN_FAILURE",
-          newValue: { username: input.username },
-          ipAddress: metadata?.ip,
-          userAgent: metadata?.userAgent,
+    try {
+      const identifier = input.username.trim();
+      const user = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: { equals: identifier, mode: "insensitive" } },
+            { name: { equals: identifier, mode: "insensitive" } },
+          ],
         },
       });
-      throw new UnauthorizedException("Credenciais invalidas");
-    }
 
-    console.log("DEBUG LOGIN:", {
-      username: input.username,
-      passwordLength: input.password?.length,
-      passwordValue: input.password,
-      hashFromDb: user.passwordHash,
-    });
+      if (!user || !user.isActive) {
+        await this.prisma.auditLog.create({
+          data: {
+            entity: "Auth",
+            action: "LOGIN_FAILURE",
+            newValue: { username: input.username },
+            ipAddress: metadata?.ip,
+            userAgent: metadata?.userAgent,
+          },
+        });
+        throw new UnauthorizedException("Credenciais invalidas");
+      }
 
-    const validPassword = await bcrypt.compare(input.password, user.passwordHash);
-    if (!validPassword) {
+      const validPassword = await bcrypt.compare(input.password, user.passwordHash);
+      if (!validPassword) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "LOGIN_FAILURE",
+            entity: "Auth",
+            newValue: { username: user.name },
+            ipAddress: metadata?.ip,
+            userAgent: metadata?.userAgent,
+          },
+        });
+        throw new UnauthorizedException("Credenciais invalidas");
+      }
+
+      const payload = this.buildPayload(user.id, user.email, user.role);
+      const tokens = await this.signTokens(payload);
+      await this.persistRefreshToken(user.id, tokens.refreshToken);
+
       await this.prisma.auditLog.create({
         data: {
           userId: user.id,
-          action: "LOGIN_FAILURE",
+          action: "LOGIN_SUCCESS",
           entity: "Auth",
-          newValue: { username: user.name },
           ipAddress: metadata?.ip,
           userAgent: metadata?.userAgent,
         },
       });
-      throw new UnauthorizedException("Credenciais invalidas");
+
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          name: user.name,
+          username: user.username || user.name,
+          email: user.email ?? "",
+          role: user.role,
+          active: user.isActive,
+          phone: user.phone,
+          whatsapp: user.whatsapp,
+          extension: user.extension,
+          position: user.position,
+          notes: user.notes,
+          departmentId: user.departmentId,
+          branchId: user.branchId,
+          mustChangePassword: user.mustChangePassword,
+          canReceiveTickets: user.canReceiveTickets,
+        },
+      };
+    } catch (error) {
+      console.error("ERRO NO LOGIN:", error);
+      throw error;
+    }
+  }
+
+  async register(dto: RegisterDto) {
+    const usernameFormatted = dto.username.trim();
+    const emailFormatted = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
+
+    const existingUsername = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: usernameFormatted, mode: "insensitive" } },
+          { name: { equals: usernameFormatted, mode: "insensitive" } },
+        ],
+      },
+    });
+
+    if (existingUsername) {
+      throw new BadRequestException("Este nome de usuário já está cadastrado.");
     }
 
-    const payload = this.buildPayload(user.id, user.email, user.role);
-    const tokens = await this.signTokens(payload);
-    await this.persistRefreshToken(user.id, tokens.refreshToken);
+    if (emailFormatted) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: { equals: emailFormatted, mode: "insensitive" } },
+      });
+      if (existingEmail) {
+        throw new BadRequestException("Este e-mail já está cadastrado por outro usuário.");
+      }
+    }
+
+    const dept = await this.prisma.department.findUnique({ where: { id: dto.departmentId } });
+    if (!dept) throw new BadRequestException("Setor/Departamento selecionado não encontrado.");
+
+    const branch = await this.prisma.branch.findUnique({ where: { id: dto.branchId } });
+    if (!branch) throw new BadRequestException("Filial/Unidade selecionada não encontrada.");
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name.trim(),
+        username: usernameFormatted,
+        email: emailFormatted,
+        passwordHash,
+        role: UserRole.SOLICITANTE,
+        departmentId: dto.departmentId,
+        branchId: dto.branchId,
+        phone: dto.phone ?? "",
+        whatsapp: dto.whatsapp ?? "",
+        extension: dto.extension ?? "",
+        position: dto.jobTitle ?? "",
+        notes: dto.notes ?? "",
+        isActive: true,
+        mustChangePassword: false,
+        canReceiveTickets: false,
+      },
+    });
 
     await this.prisma.auditLog.create({
       data: {
         userId: user.id,
-        action: "LOGIN_SUCCESS",
         entity: "Auth",
-        ipAddress: metadata?.ip,
-        userAgent: metadata?.userAgent,
+        action: "SELF_REGISTER",
+        newValue: { id: user.id, username: user.username, role: user.role },
       },
     });
+
+    const payload = this.buildPayload(user.id, user.email, user.role);
+    const tokens = await this.signTokens(payload);
+    await this.persistRefreshToken(user.id, tokens.refreshToken);
 
     return {
       ...tokens,
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
+        username: user.username || user.name,
+        email: user.email ?? "",
         role: user.role,
         active: user.isActive,
         phone: user.phone,
@@ -129,8 +219,8 @@ export class AuthService {
         notes: user.notes,
         departmentId: user.departmentId,
         branchId: user.branchId,
-        mustChangePassword: user.mustChangePassword,
-        canReceiveTickets: user.canReceiveTickets,
+        mustChangePassword: false,
+        canReceiveTickets: false,
       },
     };
   }
@@ -225,6 +315,7 @@ export class AuthService {
     return {
       id: user.id,
       name: user.name,
+      username: user.username || user.name,
       email: user.email,
       role: user.role,
       active: user.isActive,
@@ -238,5 +329,125 @@ export class AuthService {
       mustChangePassword: user.mustChangePassword,
       canReceiveTickets: user.canReceiveTickets,
     };
+  }
+
+  /**
+   * Verifica se o usuário existe e retorna dados básicos para confirmar identidade.
+   * Endpoint público — não retorna senha nem dados sensíveis.
+   */
+  async forgotPasswordRequest(username: string) {
+    const identifier = username.trim();
+    if (!identifier) throw new BadRequestException("Nome de usuario obrigatorio");
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: identifier, mode: "insensitive" } },
+          { name: { equals: identifier, mode: "insensitive" } },
+        ],
+        isActive: true,
+      },
+      select: { id: true, name: true, username: true, departmentId: true, branchId: true, phone: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException("Nenhum usuario ativo encontrado com esse nome.");
+    }
+
+    return {
+      name: user.name,
+      username: user.username ?? identifier,
+    };
+  }
+
+  /**
+   * Cria automaticamente uma OS de "Redefinição de Senha" para o usuário solicitante.
+   * A OS é atribuída ao TI e o requester é o próprio usuário.
+   */
+  async forgotPasswordOs(username: string) {
+    const identifier = username.trim();
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: identifier, mode: "insensitive" } },
+          { name: { equals: identifier, mode: "insensitive" } },
+        ],
+        isActive: true,
+      },
+      select: {
+        id: true, name: true, username: true, phone: true, email: true,
+        departmentId: true, branchId: true,
+      },
+    });
+
+    if (!user) throw new BadRequestException("Usuario nao encontrado");
+
+    // Usa o dept/branch do usuário — ou fallback para os primeiros disponíveis
+    const departmentId = user.departmentId ?? (
+      await this.prisma.department.findFirst({ select: { id: true } })
+    )?.id;
+    const branchId = user.branchId ?? (
+      await this.prisma.branch.findFirst({ select: { id: true } })
+    )?.id;
+
+    if (!departmentId || !branchId) {
+      throw new BadRequestException("Configuracao de setor/filial ausente. Contate o TI manualmente.");
+    }
+
+    // Categoria "Acesso / Senha" ou qualquer disponível
+    const category = await this.prisma.category.findFirst({
+      where: { name: { contains: "Acesso", mode: "insensitive" } },
+      select: { id: true },
+    }) ?? await this.prisma.category.findFirst({ select: { id: true } });
+
+    // Protocolo auto-incrementado
+    const year = new Date().getFullYear();
+    const prefix = `OS-${year}-`;
+    const latest = await this.prisma.ticket.findFirst({
+      where: { protocolNumber: { startsWith: prefix } },
+      orderBy: { protocolNumber: "desc" },
+      select: { protocolNumber: true },
+    });
+    const current = (() => {
+      if (!latest?.protocolNumber) return 0;
+      const raw = latest.protocolNumber.replace(prefix, "");
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    })();
+    const protocol = `OS-${year}-${String(current + 1).padStart(5, "0")}`;
+
+    const now = new Date();
+    const slaDueAt = new Date(now.getTime() + 8 * 3600000); // 8h para atendimento
+
+    const ticket = await this.prisma.ticket.create({
+      data: {
+        protocolNumber: protocol,
+        requesterId: user.id,
+        requesterName: user.name,
+        requesterPhone: user.phone ?? "",
+        requesterEmail: user.email ?? "",
+        departmentId,
+        branchId,
+        title: "Redefinição de Senha",
+        description: `O usuário ${user.name} (${user.username ?? identifier}) solicitou redefinição de sua senha de acesso ao sistema AgroDesk TI via formulário de "Esqueci minha senha". Por favor, entrar em contato com o solicitante para concluir o processo de redefinição.`,
+        categoryId: category?.id ?? undefined,
+        status: "OPEN",
+        realPriority: "HIGH",
+        suggestedPriority: "HIGH",
+        slaDueAt,
+      },
+      select: { id: true, protocolNumber: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        entity: "Auth",
+        action: "FORGOT_PASSWORD_OS_CREATED",
+        newValue: { protocol: ticket.protocolNumber, userId: user.id },
+      },
+    });
+
+    return { protocol: ticket.protocolNumber };
   }
 }

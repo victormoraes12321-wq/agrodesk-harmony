@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
-import { KeyRound, LockKeyhole, Sprout } from "lucide-react";
+import { Eye, EyeOff, KeyRound, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +13,50 @@ export const Route = createFileRoute("/app/primeiro-acesso")({
   head: () => ({ meta: [{ title: "Definir nova senha | AgroDesk TI" }] }),
   component: FirstAccessPage,
 });
+
+function PasswordInput({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+  autoComplete,
+}: {
+  id: string;
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type={show ? "text" : "password"}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required
+          className="pr-10"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShow((v) => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+        >
+          {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function FirstAccessPage() {
   const { currentUser, changeMyPassword, logout } = useApp();
@@ -56,8 +100,8 @@ function FirstAccessPage() {
       <Card className="w-full max-w-lg shadow-[var(--shadow-card)]">
         <CardHeader className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="size-11 rounded-xl grid place-items-center bg-primary text-primary-foreground">
-              <Sprout className="size-5" />
+            <div className="size-11 rounded-xl grid place-items-center bg-card border shadow-sm p-1 overflow-hidden shrink-0">
+              <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
             </div>
             <div>
               <p className="font-semibold">AgroDesk TI</p>
@@ -76,40 +120,28 @@ function FirstAccessPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={(event) => void save(event)}>
-            <div className="space-y-2">
-              <Label htmlFor="current-password">Senha temporaria</Label>
-              <Input
-                id="current-password"
-                type="password"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-password">Nova senha</Label>
-              <Input
-                id="new-password"
-                type="password"
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="Minimo de 8 caracteres"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirme a nova senha</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                value={confirmation}
-                onChange={(event) => setConfirmation(event.target.value)}
-                required
-              />
-            </div>
+            <PasswordInput
+              id="current-password"
+              label="Senha temporaria"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+            />
+            <PasswordInput
+              id="new-password"
+              label="Nova senha"
+              autoComplete="new-password"
+              placeholder="Minimo de 8 caracteres"
+              value={newPassword}
+              onChange={setNewPassword}
+            />
+            <PasswordInput
+              id="confirm-password"
+              label="Confirme a nova senha"
+              autoComplete="new-password"
+              value={confirmation}
+              onChange={setConfirmation}
+            />
             <Button type="submit" className="w-full h-11" disabled={saving}>
               <KeyRound className="size-4" /> {saving ? "Salvando..." : "Definir nova senha"}
             </Button>

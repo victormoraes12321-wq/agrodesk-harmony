@@ -87,7 +87,7 @@ export function Topbar({
     });
 
     if (found) {
-      navigate({ to: "/app/chamados/$id", params: { id: found.id } });
+      navigate({ to: "/app/chamados/$id", params: { id: found.id }, search: {} as any });
       setQuery("");
       return;
     }
@@ -222,6 +222,7 @@ export function Topbar({
                           navigate({
                             to: "/app/chamados/$id",
                             params: { id: notification.ticketId },
+                            search: {} as any,
                           });
                         }
                       }}

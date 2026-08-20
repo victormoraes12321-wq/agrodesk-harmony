@@ -185,6 +185,7 @@ export class TicketsService {
         : (category?.defaultPriority ?? TicketPriority.MEDIUM);
 
     const sla = await this.slaService.calculateSla(dto.categoryId, realPriority);
+    const finalSlaHours = dto.customSlaHours && dto.customSlaHours > 0 ? dto.customSlaHours : sla.slaHours;
     const now = new Date();
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -209,37 +210,73 @@ export class TicketsService {
         }
       }
 
-      return tx.ticket.create({
-        data: {
-          protocolNumber: protocol,
-          requesterId: actor.sub,
-          requesterName: dto.requesterName,
-          requesterPhone: dto.requesterPhone,
-          requesterEmail: dto.requesterEmail?.trim() || actor.email,
-          departmentId: dto.departmentId,
-          branchId: dto.branchId,
-          title: normalizedTitle,
-          description: normalizedDescription,
-          categoryId: dto.categoryId,
-          subcategoryId: dto.subcategoryId,
-          assetId: resolvedAssetId,
-          suggestedPriority: dto.suggestedPriority,
-          realPriority,
-          equipmentName: dto.equipmentName,
-          assetTag: dto.assetTag,
-          preferredServiceTime: dto.preferredServiceTime,
-          impactDescription: dto.impactDescription,
-          additionalNotes: dto.additionalNotes,
-          slaDueAt: this.buildDueAt(now, sla.slaHours),
-          statusHistory: {
-            create: {
+      const isProxyCreation = actor.role === UserRole.TI_ADMIN && Boolean(dto.targetUserId);
+      const effectiveRequesterId = isProxyCreation ? (dto.targetUserId as string) : actor.sub;
+      const isInstantResolve = actor.role === UserRole.TI_ADMIN && Boolean(dto.resolveImmediately);
+      const initialStatus = isInstantResolve ? TicketStatus.RESOLVED : TicketStatus.OPEN;
+
+      const ticketData: any = {
+        protocolNumber: protocol,
+        requesterId: effectiveRequesterId,
+        requesterName: dto.requesterName,
+        requesterPhone: dto.requesterPhone,
+        requesterEmail: dto.requesterEmail?.trim() || actor.email,
+        departmentId: dto.departmentId,
+        branchId: dto.branchId,
+        title: normalizedTitle,
+        description: normalizedDescription,
+        categoryId: dto.categoryId && dto.categoryId.trim() !== "" ? dto.categoryId : undefined,
+        subcategoryId: dto.subcategoryId && dto.subcategoryId.trim() !== "" ? dto.subcategoryId : undefined,
+        assetId: resolvedAssetId,
+        suggestedPriority: dto.suggestedPriority,
+        realPriority,
+        equipmentName: dto.equipmentName,
+        assetTag: dto.assetTag,
+        preferredServiceTime: dto.preferredServiceTime,
+        impactDescription: dto.impactDescription,
+        additionalNotes: dto.additionalNotes,
+        slaDueAt: this.buildDueAt(now, finalSlaHours),
+        status: initialStatus,
+        assignedToId: isInstantResolve ? actor.sub : undefined,
+        resolvedAt: isInstantResolve ? now : undefined,
+        statusHistory: {
+          create: [
+            {
               fromStatus: null,
               toStatus: TicketStatus.OPEN,
               changedById: actor.sub,
-              note: "Solicitacao registrada",
+              note: isProxyCreation
+                ? "Solicitacao registrada pelo suporte TI em nome do usuario"
+                : "Solicitacao registrada",
             },
-          },
+            ...(isInstantResolve
+              ? [
+                  {
+                    fromStatus: TicketStatus.OPEN,
+                    toStatus: TicketStatus.RESOLVED,
+                    changedById: actor.sub,
+                    note: dto.resolutionNotes
+                      ? `Atendimento Rapido: ${dto.resolutionNotes}`
+                      : "Atendimento rapido finalizado na hora pelo suporte",
+                  },
+                ]
+              : []),
+          ],
         },
+      };
+
+      if (isInstantResolve && dto.resolutionNotes) {
+        ticketData.comments = {
+          create: {
+            userId: actor.sub,
+            content: `⚡ Solução (Atendimento Rápido): ${dto.resolutionNotes}`,
+            isInternal: false,
+          },
+        };
+      }
+
+      return tx.ticket.create({
+        data: ticketData,
         include: {
           department: true,
           branch: true,
@@ -447,6 +484,19 @@ export class TicketsService {
       }
     }
 
+    let recalculatedSlaDueAt: Date | undefined = undefined;
+    if (dto.categoryId !== undefined && dto.categoryId !== existing.categoryId) {
+      if (dto.categoryId && dto.categoryId.trim() !== "") {
+        const cat = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
+        if (cat) {
+          const slaHours = cat.defaultSlaHours || 24;
+          recalculatedSlaDueAt = this.buildDueAt(existing.createdAt, slaHours);
+        }
+      } else {
+        recalculatedSlaDueAt = this.buildDueAt(existing.createdAt, 24);
+      }
+    }
+
     const updated = await this.prisma.ticket.update({
       where: { id },
       data: {
@@ -457,8 +507,8 @@ export class TicketsService {
         branchId: dto.branchId ?? undefined,
         description: dto.description ?? undefined,
         title: dto.title ?? undefined,
-        categoryId: dto.categoryId ?? undefined,
-        subcategoryId: dto.subcategoryId ?? undefined,
+        categoryId: dto.categoryId !== undefined ? (dto.categoryId || null) : undefined,
+        subcategoryId: dto.subcategoryId !== undefined ? (dto.subcategoryId || null) : undefined,
         assetId: resolvedAssetId !== undefined ? resolvedAssetId : undefined,
         suggestedPriority: dto.suggestedPriority ?? undefined,
         equipmentName: dto.equipmentName ?? undefined,
@@ -466,6 +516,7 @@ export class TicketsService {
         preferredServiceTime: dto.preferredServiceTime ?? undefined,
         impactDescription: dto.impactDescription ?? undefined,
         additionalNotes: dto.additionalNotes ?? undefined,
+        slaDueAt: recalculatedSlaDueAt ?? undefined,
       },
     });
 
@@ -757,16 +808,38 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.findUnique({ where: { id } });
     if (!ticket) throw new NotFoundException("OS nao encontrada");
 
-    const nextSlaDueAt = dto.slaDueAt
-      ? new Date(dto.slaDueAt)
-      : dto.slaHours
-        ? this.buildDueAt(ticket.createdAt, dto.slaHours)
-        : ticket.slaDueAt;
+    let nextSlaDueAt: Date | null = null;
+    let extensionLogNote = "";
+
+    if (dto.extendHours && dto.extendHours > 0) {
+      const baseTime = ticket.slaDueAt && ticket.slaDueAt.getTime() > Date.now()
+        ? ticket.slaDueAt.getTime()
+        : Date.now();
+      nextSlaDueAt = new Date(baseTime + dto.extendHours * 3600000);
+      extensionLogNote = `Prazo de SLA prorrogado em +${dto.extendHours}h.${dto.reason ? ` Motivo: ${dto.reason.trim()}` : ""}`;
+    } else if (dto.slaDueAt) {
+      nextSlaDueAt = new Date(dto.slaDueAt);
+      extensionLogNote = `Prazo de SLA redefinido para ${nextSlaDueAt.toLocaleDateString("pt-BR")} ${nextSlaDueAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.${dto.reason ? ` Motivo: ${dto.reason.trim()}` : ""}`;
+    } else if (dto.slaHours && dto.slaHours > 0) {
+      nextSlaDueAt = this.buildDueAt(ticket.createdAt, dto.slaHours);
+      extensionLogNote = `Prazo de SLA ajustado para ${dto.slaHours} horas.${dto.reason ? ` Motivo: ${dto.reason.trim()}` : ""}`;
+    } else {
+      nextSlaDueAt = ticket.slaDueAt;
+    }
 
     const updated = await this.prisma.ticket.update({
       where: { id },
       data: {
         slaDueAt: nextSlaDueAt,
+        comments: extensionLogNote
+          ? {
+              create: {
+                userId: actor.sub,
+                content: `⏱️ ${extensionLogNote}`,
+                isInternal: false,
+              },
+            }
+          : undefined,
       },
     });
 
@@ -775,7 +848,7 @@ export class TicketsService {
       entityId: id,
       action: "TICKET_SLA_UPDATE",
       beforeJson: { slaDueAt: ticket.slaDueAt },
-      afterJson: { slaDueAt: nextSlaDueAt },
+      afterJson: { slaDueAt: nextSlaDueAt, reason: dto.reason, extendHours: dto.extendHours },
     });
 
     return updated;

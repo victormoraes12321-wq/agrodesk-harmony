@@ -103,15 +103,19 @@ export function AppSidebar({
         mobile ? "w-full" : "hidden lg:sticky lg:top-0 lg:flex lg:h-screen",
       )}
     >
-      <div className="px-5 py-5 flex items-center gap-3 border-b border-sidebar-border">
-        <div className="size-11 rounded-xl grid place-items-center bg-sidebar-primary text-sidebar-primary-foreground shadow-[var(--shadow-glow)]">
-          <Sprout className="size-5" />
+      <Link
+        to={admin ? "/app/dashboard" : "/app/portal"}
+        onClick={onNavigate}
+        className="px-5 py-5 flex items-center gap-3 border-b border-sidebar-border hover:bg-sidebar-accent/50 transition cursor-pointer"
+      >
+        <div className="size-11 rounded-xl grid place-items-center bg-white/10 p-1 border border-white/20 shadow-[var(--shadow-glow)] overflow-hidden shrink-0">
+          <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
         </div>
         <div>
           <div className="text-sm font-semibold tracking-tight">AgroDesk TI</div>
           <div className="text-[11px] text-sidebar-foreground/65">Central de Ticket e OS</div>
         </div>
-      </div>
+      </Link>
 
       <div className="px-4 pt-4">
         <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3">

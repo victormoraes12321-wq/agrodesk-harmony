@@ -29,6 +29,10 @@ export interface CreateTicketInput {
   impact?: string;
   additionalNotes?: string;
   attachments?: Array<{ name: string; sizeKb: number }>;
+  assetId?: string;
+  targetUserId?: string;
+  resolveImmediately?: boolean;
+  resolutionNotes?: string;
 }
 
 export interface PersistedAppState {

@@ -18,7 +18,8 @@ export class UsersService {
   private toPublicUser(user: {
     id: string;
     name: string;
-    email: string;
+    username?: string | null;
+    email?: string | null;
     role: UserRole;
     phone: string;
     whatsapp: string | null;
@@ -36,7 +37,8 @@ export class UsersService {
     return {
       id: user.id,
       name: user.name,
-      email: user.email,
+      username: user.username || user.name,
+      email: user.email ?? "",
       role: user.role,
       phone: user.phone,
       whatsapp: user.whatsapp,
@@ -99,10 +101,26 @@ export class UsersService {
   }
 
   async create(actor: AuthUser, dto: CreateUserDto) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+    const usernameFormatted = dto.username.trim();
+    const emailFormatted = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
+
+    const existingUsername = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: usernameFormatted, mode: "insensitive" } },
+          { name: { equals: usernameFormatted, mode: "insensitive" } },
+        ],
+      },
     });
-    if (existing) throw new BadRequestException("E-mail ja cadastrado");
+    if (existingUsername) throw new BadRequestException("Nome de usuário já cadastrado");
+
+    if (emailFormatted) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: { equals: emailFormatted, mode: "insensitive" } },
+      });
+      if (existingEmail) throw new BadRequestException("E-mail já cadastrado por outro usuário");
+    }
+
     await this.ensureDepartmentAndBranch({
       departmentId: dto.departmentId,
       branchId: dto.branchId,
@@ -111,8 +129,9 @@ export class UsersService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
-        name: dto.name,
-        email: dto.email.toLowerCase(),
+        name: dto.name.trim(),
+        username: usernameFormatted,
+        email: emailFormatted,
         passwordHash,
         role: dto.role ?? UserRole.SOLICITANTE,
         phone: dto.phone,
@@ -131,7 +150,7 @@ export class UsersService {
       },
     });
 
-    await this.logAudit(actor, "USER_CREATE", user.id, { email: user.email, role: user.role });
+    await this.logAudit(actor, "USER_CREATE", user.id, { username: user.username, role: user.role });
     return this.toPublicUser(user);
   }
 
@@ -140,6 +159,7 @@ export class UsersService {
       select: {
         id: true,
         name: true,
+        username: true,
         email: true,
         role: true,
         phone: true,
@@ -165,6 +185,7 @@ export class UsersService {
       select: {
         id: true,
         name: true,
+        username: true,
         email: true,
         role: true,
         phone: true,
@@ -194,8 +215,43 @@ export class UsersService {
     });
 
     const userData: Record<string, unknown> = {};
-    if (dto.name !== undefined) userData.name = dto.name;
-    if (dto.email !== undefined) userData.email = dto.email.toLowerCase();
+    if (dto.name !== undefined) userData.name = dto.name.trim();
+
+    if (dto.username !== undefined && dto.username.trim() !== "") {
+      const usernameFormatted = dto.username.trim();
+      const currentUsername = existing.username?.toLowerCase();
+      if (usernameFormatted.toLowerCase() !== currentUsername) {
+        const conflict = await this.prisma.user.findFirst({
+          where: {
+            id: { not: id },
+            OR: [
+              { username: { equals: usernameFormatted, mode: "insensitive" } },
+              { name: { equals: usernameFormatted, mode: "insensitive" } },
+            ],
+          },
+        });
+        if (conflict) {
+          throw new BadRequestException("Este nome de usuário já está em uso por outro usuário.");
+        }
+        userData.username = usernameFormatted;
+      }
+    }
+
+    if (dto.email !== undefined) {
+      const emailFormatted = dto.email && dto.email.trim() ? dto.email.trim().toLowerCase() : null;
+      if (emailFormatted && emailFormatted !== existing.email?.toLowerCase()) {
+        const conflict = await this.prisma.user.findFirst({
+          where: {
+            id: { not: id },
+            email: { equals: emailFormatted, mode: "insensitive" },
+          },
+        });
+        if (conflict) {
+          throw new BadRequestException("Este e-mail já está em uso por outro usuário.");
+        }
+      }
+      userData.email = emailFormatted;
+    }
     if (dto.role !== undefined) userData.role = dto.role;
     if (dto.active !== undefined) userData.isActive = dto.active;
     if (dto.role === UserRole.SOLICITANTE) userData.canReceiveTickets = false;
@@ -208,13 +264,13 @@ export class UsersService {
       where: { id },
       data: {
         ...userData,
-        phone: dto.phone ?? undefined,
-        whatsapp: dto.whatsapp ?? undefined,
-        extension: dto.extension ?? undefined,
-        position: dto.jobTitle ?? undefined,
-        notes: dto.notes ?? undefined,
-        departmentId: dto.departmentId ?? undefined,
-        branchId: dto.branchId ?? undefined,
+        phone: dto.phone !== undefined ? dto.phone : undefined,
+        whatsapp: dto.whatsapp !== undefined ? dto.whatsapp : undefined,
+        extension: dto.extension !== undefined ? dto.extension : undefined,
+        position: dto.jobTitle !== undefined ? dto.jobTitle : undefined,
+        notes: dto.notes !== undefined ? dto.notes : undefined,
+        departmentId: dto.departmentId !== undefined ? dto.departmentId : undefined,
+        branchId: dto.branchId !== undefined ? dto.branchId : undefined,
       },
     });
 
@@ -273,17 +329,36 @@ export class UsersService {
       branchId: dto.branchId,
     });
 
+    const userData: Record<string, unknown> = {};
+    if (dto.name !== undefined) userData.name = dto.name.trim();
+
+    if (dto.email !== undefined) {
+      const emailFormatted = dto.email && dto.email.trim() ? dto.email.trim().toLowerCase() : null;
+      if (emailFormatted && emailFormatted !== existing.email?.toLowerCase()) {
+        const conflict = await this.prisma.user.findFirst({
+          where: {
+            id: { not: userId },
+            email: { equals: emailFormatted, mode: "insensitive" },
+          },
+        });
+        if (conflict) {
+          throw new BadRequestException("Este e-mail já está em uso por outro usuário.");
+        }
+      }
+      userData.email = emailFormatted;
+    }
+
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        name: dto.name ?? undefined,
-        phone: dto.phone ?? undefined,
-        whatsapp: dto.whatsapp ?? undefined,
-        extension: dto.extension ?? undefined,
-        position: dto.jobTitle ?? undefined,
-        notes: dto.notes ?? undefined,
-        departmentId: dto.departmentId ?? undefined,
-        branchId: dto.branchId ?? undefined,
+        ...userData,
+        phone: dto.phone !== undefined ? dto.phone : undefined,
+        whatsapp: dto.whatsapp !== undefined ? dto.whatsapp : undefined,
+        extension: dto.extension !== undefined ? dto.extension : undefined,
+        position: dto.jobTitle !== undefined ? dto.jobTitle : undefined,
+        notes: dto.notes !== undefined ? dto.notes : undefined,
+        departmentId: dto.departmentId !== undefined ? dto.departmentId : undefined,
+        branchId: dto.branchId !== undefined ? dto.branchId : undefined,
       },
     });
 
@@ -293,6 +368,8 @@ export class UsersService {
         entity: "User",
         entityId: userId,
         action: "USER_UPDATE_ME",
+        newValue: toJsonValue(dto),
+        oldValue: toJsonValue(this.stripPassword(existing as unknown as Record<string, unknown>)),
       },
     });
 

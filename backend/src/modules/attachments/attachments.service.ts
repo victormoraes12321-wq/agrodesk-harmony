@@ -22,20 +22,10 @@ const BLOCKED_EXTENSIONS = new Set([
   ".dll",
   ".com",
   ".scr",
-  ".jar",
-  ".js",
-]);
-
-const ALLOWED_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-  "text/plain",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
+  ".vbs",
+  ".pif",
+  ".gadget",
+  ".application",
 ]);
 
 @Injectable()
@@ -89,18 +79,14 @@ export class AttachmentsService {
   }
 
   private ensureUploadAllowed(file: Express.Multer.File, maxMb: number) {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new BadRequestException("Tipo de arquivo nao permitido");
-    }
-
     const ext = path.extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.has(ext)) {
-      throw new BadRequestException("Executaveis nao sao permitidos");
+      throw new BadRequestException("Arquivos executáveis não são permitidos por segurança.");
     }
 
     const maxBytes = maxMb * 1024 * 1024;
     if (file.size > maxBytes) {
-      throw new BadRequestException(`Arquivo excede limite de ${maxMb}MB`);
+      throw new BadRequestException(`Arquivo excede o limite configurado de ${maxMb}MB.`);
     }
   }
 

@@ -1,0 +1,18 @@
+# =======================================================================
+# EXEMPLO DE CONFIGURACAO DO CADDY PARA O AGRODESK TI
+# =======================================================================
+# Este exemplo mostra como publicar o AgroDesk TI com dominio personalizado 
+# (ex: ti.suaempresa.com.br) usando o Caddy como Reverse Proxy, sem conflito 
+# com os outros 2 sistemas do servidor (porta 3000 mantida para o outro sistema).
+
+ti.suaempresa.com.br {
+    # 1. Encaminha as chamadas de API para o Backend (porta 3333)
+    handle /api/* {
+        reverse_proxy localhost:3333
+    }
+
+    # 2. Encaminha a interface Web para o Frontend (porta 3001)
+    handle {
+        reverse_proxy localhost:3001
+    }
+}

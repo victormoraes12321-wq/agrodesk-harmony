@@ -1,6 +1,7 @@
 import {
   apiClient,
   clearAuthTokens,
+  getAccessToken,
   getRefreshToken,
   setAccessToken,
   setRefreshToken,
@@ -381,6 +382,8 @@ function mapTicket(entry: unknown): Ticket {
     suggestedPriority: row.suggestedPriority
       ? mapPriorityFromApi(row.suggestedPriority)
       : undefined,
+    asset: row.asset ?? null,
+    assetId: asString(row.assetId) ?? null,
     priority: mapPriorityFromApi(row.realPriority ?? row.priority),
     status: mapStatusFromApi(row.status),
     assigneeId:
@@ -403,6 +406,7 @@ function mapTicket(entry: unknown): Ticket {
     timeSpentMinutes: asNumber(row.timeSpentMinutes),
     internalNotes: asString(row.internalNotes) ?? undefined,
     slaHours: parseSlaHours(row),
+    slaDueAt: toIso(row.slaDueAt) || undefined,
     createdAt,
     updatedAt: toIso(row.updatedAt ?? row.createdAt),
     closedAt: closedAt || undefined,
@@ -423,11 +427,14 @@ function mapUser(entry: unknown): User {
   const row = (entry ?? {}) as Record<string, unknown>;
   const profile = (row.profile ?? {}) as Record<string, unknown>;
   const role = asString(row.role) === "TI_ADMIN" ? "TI_ADMIN" : "SOLICITANTE";
+  const name = asString(row.name) ?? "Usuario";
+  const username = asString(row.username) ?? name;
 
   return {
     id: asString(row.id) ?? `u-${Date.now()}`,
-    name: asString(row.name) ?? "Usuario",
-    email: asString(row.email) ?? "-",
+    name,
+    username,
+    email: asString(row.email) ?? "",
     phone: asString(row.phone) ?? asString(profile.phone) ?? "-",
     whatsapp: asString(row.whatsapp) ?? asString(profile.whatsapp) ?? undefined,
     extension: asString(row.extension) ?? asString(profile.extension) ?? undefined,
@@ -717,6 +724,37 @@ export async function loginApi(username: string, password: string) {
   };
 }
 
+export interface RegisterInput {
+  name: string;
+  username?: string;
+  email?: string;
+  password: string;
+  departmentId: string;
+  branchId: string;
+  phone?: string;
+  whatsapp?: string;
+  extension?: string;
+  jobTitle?: string;
+  notes?: string;
+}
+
+export async function registerApi(input: RegisterInput) {
+  const payload = await apiClient.post<{
+    accessToken: string;
+    refreshToken: string;
+    user: unknown;
+  }>("/auth/register", input as unknown as Record<string, unknown>, { skipAuth: true });
+
+  setAccessToken(payload.accessToken);
+  setRefreshToken(payload.refreshToken);
+
+  return {
+    user: mapUser(payload.user),
+    accessToken: payload.accessToken,
+    refreshToken: payload.refreshToken,
+  };
+}
+
 export async function fetchMeApi() {
   const payload = await apiClient.get<unknown>("/auth/me");
   return mapUser(payload);
@@ -742,6 +780,7 @@ export async function listUsersApi() {
 export async function createUserApi(user: User, password: string) {
   const payload = await apiClient.post<unknown>("/users", {
     name: user.name,
+    username: user.username,
     email: user.email,
     password,
     role: user.role,
@@ -761,6 +800,7 @@ export async function createUserApi(user: User, password: string) {
 export async function updateUserApi(user: User) {
   const payload = await apiClient.patch<unknown>(`/users/${user.id}`, {
     name: user.name,
+    username: user.username,
     email: user.email,
     role: user.role,
     phone: user.phone,
@@ -791,6 +831,7 @@ export async function changeMyPasswordApi(currentPassword: string, newPassword: 
 export async function updateMyProfileApi(input: Partial<User>) {
   const payload = await apiClient.patch<unknown>("/users/me/profile", {
     name: input.name,
+    email: input.email,
     phone: input.phone,
     whatsapp: input.whatsapp,
     extension: input.extension,
@@ -804,6 +845,11 @@ export async function updateMyProfileApi(input: Partial<User>) {
 
 export async function listDepartmentsApi() {
   const payload = await apiClient.get<unknown[]>("/departments");
+  return payload.map(mapDepartment);
+}
+
+export async function listPublicDepartmentsApi() {
+  const payload = await apiClient.get<unknown[]>("/departments", { skipAuth: true });
   return payload.map(mapDepartment);
 }
 
@@ -825,6 +871,11 @@ export async function updateDepartmentApi(input: Department) {
 
 export async function listBranchesApi() {
   const payload = await apiClient.get<unknown[]>("/branches");
+  return payload.map(mapBranch);
+}
+
+export async function listPublicBranchesApi() {
+  const payload = await apiClient.get<unknown[]>("/branches", { skipAuth: true });
   return payload.map(mapBranch);
 }
 
@@ -919,6 +970,9 @@ export async function createTicketApi(input: CreateTicketInput) {
       preferredServiceTime: input.bestTime || undefined,
       impactDescription: input.impact || undefined,
       additionalNotes: input.additionalNotes || undefined,
+      targetUserId: input.targetUserId || undefined,
+      resolveImmediately: input.resolveImmediately || undefined,
+      resolutionNotes: input.resolutionNotes || undefined,
     });
   });
   return mapTicket(payload);
@@ -929,6 +983,26 @@ export async function uploadAttachmentApi(ticketId: string, file: File, internal
   form.append("file", file);
   if (internal) form.append("internal", "true");
   await apiClient.post(`/tickets/${ticketId}/attachments`, form);
+}
+
+export async function downloadAttachmentFile(attachmentId: string, filename: string) {
+  const token = getAccessToken();
+  const url = `${apiClient.baseUrl}/attachments/${attachmentId}/download`;
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error("Não foi possível baixar o arquivo anexado.");
+  }
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(downloadUrl);
 }
 
 export async function updateTicketFieldsApi(ticketId: string, patch: Partial<Ticket>) {
@@ -1032,6 +1106,22 @@ export async function updateTicketTechnicalApi(
     internalNotes: patch.internalNotes,
     resolutionSummary: patch.resolutionSummary,
   });
+  return mapTicket(payload);
+}
+
+export async function updateTicketSlaApi(
+  ticketId: string,
+  input:
+    | number
+    | {
+        slaHours?: number;
+        slaDueAt?: string;
+        extendHours?: number;
+        reason?: string;
+      },
+) {
+  const body = typeof input === "number" ? { slaHours: input } : input;
+  const payload = await apiClient.patch<unknown>(`/tickets/${ticketId}/sla`, body);
   return mapTicket(payload);
 }
 

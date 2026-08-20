@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { TicketPriority } from "@prisma/client";
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, MinLength } from "class-validator";
 
 export class CreateTicketDto {
   @ApiProperty()
@@ -67,6 +67,12 @@ export class CreateTicketDto {
   realPriority?: TicketPriority;
 
   @ApiPropertyOptional()
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  customSlaHours?: number;
+
+  @ApiPropertyOptional()
   @IsString()
   @IsOptional()
   equipmentName?: string;
@@ -90,4 +96,18 @@ export class CreateTicketDto {
   @IsString()
   @IsOptional()
   additionalNotes?: string;
+
+  @ApiPropertyOptional({ description: "ID do usuário solicitante (quando aberto por TI_ADMIN em nome de outro)" })
+  @IsString()
+  @IsOptional()
+  targetUserId?: string;
+
+  @ApiPropertyOptional({ description: "Se true, encerra o chamado imediatamente como Atendimento Rápido" })
+  @IsOptional()
+  resolveImmediately?: boolean;
+
+  @ApiPropertyOptional({ description: "Nota ou solução aplicada no Atendimento Rápido" })
+  @IsString()
+  @IsOptional()
+  resolutionNotes?: string;
 }
