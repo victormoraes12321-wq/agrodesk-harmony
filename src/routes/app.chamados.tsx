@@ -74,7 +74,16 @@ function TicketsManagementRoute() {
   );
 }
 
-const OPEN_STATUSES: Ticket["status"][] = ["ABERTO", "EM_ANALISE", "REABERTO"];
+const OPEN_STATUSES: Ticket["status"][] = [
+  "ABERTO",
+  "EM_ANALISE",
+  "EM_ATENDIMENTO",
+  "AGUARDANDO_USUARIO",
+  "AGUARDANDO_PECA",
+  "REABERTO",
+];
+
+const RESOLVED_STATUSES: Ticket["status"][] = ["RESOLVIDO", "FINALIZADO"];
 
 const PRIORITY_WEIGHT: Record<Ticket["priority"], number> = {
   CRITICA: 4,
@@ -205,7 +214,9 @@ function TicketsManagementPage() {
         const statusMatch =
           search.quick === "OPEN"
             ? OPEN_STATUSES.includes(ticket.status)
-            : search.status === "ALL" || ticket.status === search.status;
+            : search.quick === "RESOLVED_MONTH"
+              ? RESOLVED_STATUSES.includes(ticket.status)
+              : search.status === "ALL" || ticket.status === search.status;
 
         const priorityMatch = search.priority === "ALL" || ticket.priority === search.priority;
         const assigneeMatch =

@@ -375,7 +375,7 @@ function DashboardPage() {
           value={metrics.resolvedThisMonth}
           icon={ListChecks}
           tone="success"
-          onClick={() => openTicketsWithFilters({ status: "RESOLVIDO", period: "THIS_MONTH" })}
+          onClick={() => openTicketsWithFilters({ quick: "RESOLVED_MONTH", period: "THIS_MONTH" })}
         />
         <StatCard
           label="Finalizadas hoje"

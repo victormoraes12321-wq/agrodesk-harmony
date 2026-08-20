@@ -133,6 +133,7 @@ function MyTicketsPage() {
             <option value="AGUARDANDO_PECA">Aguardando peca</option>
             <option value="RESOLVIDO">Resolvido</option>
             <option value="FINALIZADO">Finalizado</option>
+            <option value="REABERTO">Reaberto</option>
             <option value="CANCELADO">Cancelado</option>
           </select>
         </div>

@@ -16,7 +16,7 @@ const PRIORITY_VALUES: TicketPriority[] = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 
 export type TicketListPeriod = "ALL" | "TODAY" | "7D" | "30D" | "90D" | "THIS_MONTH";
 export type TicketListSlaFilter = "ALL" | "VENCIDO" | "PROXIMO";
-export type TicketListQuickFilter = "NONE" | "OPEN";
+export type TicketListQuickFilter = "NONE" | "OPEN" | "RESOLVED_MONTH";
 export type TicketListSortBy = "createdAt" | "priority" | "sla";
 export type TicketListSortDir = "asc" | "desc";
 
@@ -77,7 +77,10 @@ export function getDefaultTicketListSearch(): TicketListSearch {
 
 export function parseTicketListSearch(raw: Record<string, unknown>): TicketListSearch {
   const q = typeof raw.q === "string" ? raw.q : "";
-  const quick = raw.quick === "OPEN" ? "OPEN" : "NONE";
+  const quickRaw = typeof raw.quick === "string" ? raw.quick : "NONE";
+  const quick: TicketListQuickFilter = ["NONE", "OPEN", "RESOLVED_MONTH"].includes(quickRaw)
+    ? (quickRaw as TicketListQuickFilter)
+    : "NONE";
 
   const statusRaw = typeof raw.status === "string" ? raw.status : "ALL";
   const status: TicketListSearch["status"] = isStatus(statusRaw) ? statusRaw : "ALL";

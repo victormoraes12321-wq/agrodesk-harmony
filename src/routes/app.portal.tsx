@@ -52,8 +52,11 @@ function PortalPage() {
 
   const counts = useMemo(() => {
     return {
-      opened: mine.filter((ticket) => ["ABERTO", "EM_ANALISE", "REABERTO"].includes(ticket.status))
-        .length,
+      opened: mine.filter((ticket) =>
+        ["ABERTO", "EM_ANALISE", "EM_ATENDIMENTO", "AGUARDANDO_USUARIO", "AGUARDANDO_PECA", "REABERTO"].includes(
+          ticket.status,
+        ),
+      ).length,
       inProgress: mine.filter((ticket) => ticket.status === "EM_ATENDIMENTO").length,
       waiting: mine.filter((ticket) =>
         ["AGUARDANDO_USUARIO", "AGUARDANDO_PECA"].includes(ticket.status),
