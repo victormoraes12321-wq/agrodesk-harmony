@@ -139,14 +139,22 @@ function DashboardPage() {
 
   const metrics = useMemo(() => {
     const open = tickets.filter((ticket) =>
-      ["ABERTO", "EM_ANALISE", "REABERTO"].includes(ticket.status),
+      ["ABERTO", "EM_ANALISE", "EM_ATENDIMENTO", "AGUARDANDO_USUARIO", "AGUARDANDO_PECA", "REABERTO"].includes(
+        ticket.status,
+      ),
     ).length;
     const inProgress = tickets.filter((ticket) => ticket.status === "EM_ATENDIMENTO").length;
     const waiting = tickets.filter((ticket) => ticket.status === "AGUARDANDO_USUARIO").length;
-    const critical = criticalCount(tickets);
-    const overdue =
-      realOverdueTickets.length || tickets.filter((ticket) => isSlaOverdue(ticket)).length;
-    const resolvedThisMonth = monthlyResolved(tickets);
+    const critical = tickets.filter((ticket) => ticket.priority === "CRITICA").length;
+    const overdue = tickets.filter((ticket) => isSlaOverdue(ticket)).length;
+    const now = new Date();
+    const resolvedThisMonth = tickets.filter((ticket) => {
+      if (ticket.status !== "RESOLVIDO" && ticket.status !== "FINALIZADO") return false;
+      const refDate = ticket.resolvedAt || ticket.closedAt || ticket.updatedAt;
+      if (!refDate) return false;
+      const d = new Date(refDate);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const finalizedToday = tickets.filter((ticket) => {
@@ -169,7 +177,7 @@ function DashboardPage() {
       avgTimeHours,
       satisfaction,
     };
-  }, [overview, realOverdueTickets.length, tickets]);
+  }, [overview, tickets]);
 
   const fallbackStatus = useMemo(() => {
     return groupByStatus(tickets).map((item) => ({

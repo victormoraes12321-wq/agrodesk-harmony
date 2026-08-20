@@ -13,6 +13,7 @@ import {
   PlusCircle,
   Search,
   Sparkles,
+  Star,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -40,6 +41,14 @@ function PortalPage() {
   const mine = useMemo(() => {
     return tickets.filter((ticket) => ticket.requesterId === currentUser?.id);
   }, [tickets, currentUser]);
+
+  const unratedTickets = useMemo(() => {
+    return mine.filter(
+      (ticket) =>
+        (ticket.status === "RESOLVIDO" || ticket.status === "FINALIZADO") &&
+        (!ticket.rating || ticket.rating === 0),
+    );
+  }, [mine]);
 
   const counts = useMemo(() => {
     return {
@@ -123,6 +132,33 @@ function PortalPage() {
           </Button>
         </div>
       </section>
+
+      {/* Banner de Chamados Aguardando Avaliação */}
+      {unratedTickets.length > 0 && (
+        <div className="rounded-3xl border-2 border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md animate-in fade-in duration-300">
+          <div className="flex items-center gap-3.5">
+            <div className="size-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 grid place-items-center shrink-0 border border-amber-500/30 shadow-xs">
+              <Sparkles className="size-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                Você tem {unratedTickets.length} chamado{unratedTickets.length > 1 ? "s" : ""} finalizado{unratedTickets.length > 1 ? "s" : ""} aguardando avaliação!
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Sua avaliação é rápida (leva 10 segundos) e nos ajuda a aprimorar o suporte de T.I.
+              </p>
+            </div>
+          </div>
+          <Button
+            asChild
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold gap-2 text-xs shrink-0 shadow-md cursor-pointer animate-pulse-soft"
+          >
+            <Link to="/app/chamados/$id" params={{ id: unratedTickets[0].id }}>
+              <Star className="size-4 fill-amber-200 text-amber-200" /> Avaliar {unratedTickets[0].protocol}
+            </Link>
+          </Button>
+        </div>
+      )}
 
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {summaryCards.map((card) => {

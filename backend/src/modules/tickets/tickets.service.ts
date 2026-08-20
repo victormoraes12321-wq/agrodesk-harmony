@@ -754,12 +754,16 @@ export class TicketsService {
       ticketId: id,
     });
 
-    if (dto.status === TicketStatus.CLOSED) {
+    if (
+      (dto.status === TicketStatus.RESOLVED || dto.status === TicketStatus.CLOSED) &&
+      ticket.requesterId &&
+      ticket.requesterId !== actor.sub
+    ) {
       await this.notificationsService.notifyUser({
         userId: ticket.requesterId,
         type: NotificationType.TICKET_RESOLVED,
-        title: "OS finalizada",
-        message: `${ticket.protocolNumber} foi finalizada`,
+        title: "Sua OS foi concluída!",
+        message: `A OS ${ticket.protocolNumber} foi concluída pelo suporte de T.I. Confira a solução aplicada e avalie o atendimento!`,
         ticketId: id,
       });
     }

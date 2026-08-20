@@ -59,9 +59,7 @@ export function monthlyResolved(tickets: Ticket[]): number {
 }
 
 export function criticalCount(tickets: Ticket[]): number {
-  return tickets.filter(
-    (ticket) => ticket.priority === "CRITICA" || ticket.suggestedPriority === "CRITICA",
-  ).length;
+  return tickets.filter((ticket) => ticket.priority === "CRITICA").length;
 }
 
 export function priorityDistribution(

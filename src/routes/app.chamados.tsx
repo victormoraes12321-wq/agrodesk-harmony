@@ -89,7 +89,7 @@ function periodMatches(ticket: Ticket, period: TicketListSearch["period"]): bool
   const startToday = new Date(now);
   startToday.setHours(0, 0, 0, 0);
 
-  const reference = ticket.closedAt ?? ticket.updatedAt ?? ticket.createdAt;
+  const reference = ticket.resolvedAt ?? ticket.closedAt ?? ticket.updatedAt ?? ticket.createdAt;
   const referenceDate = new Date(reference);
   const ageHours = (now.getTime() - referenceDate.getTime()) / 3600000;
 

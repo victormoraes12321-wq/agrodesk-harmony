@@ -2,6 +2,7 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowLeft,
+  Award,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  HeartHandshake,
   History,
   Laptop,
   MapPin,
@@ -32,6 +34,8 @@ import {
   Shield,
   ShieldAlert,
   Sparkles,
+  Star,
+  ThumbsUp,
   Trash2,
   UploadCloud,
   User,
@@ -182,18 +186,28 @@ function TicketDetailRoute() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Visão do Solicitante
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Visão do Solicitante
+// ─────────────────────────────────────────────────────────────────────────────
 function RequesterTicketView({ ticket }: { ticket: Ticket }) {
-  const { departments, branches, categories, addComment, rateTicket, uploadAttachment } = useApp();
+  const { departments, branches, categories, users, addComment, rateTicket, uploadAttachment } = useApp();
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(ticket.rating ?? 0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [ratingComment, setRatingComment] = useState(ticket.ratingComment ?? "");
+  const [selectedCompliments, setSelectedCompliments] = useState<string[]>([]);
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const publicComments = ticket.comments.filter((entry) => !entry.internal);
-  const canRate = ticket.status === "FINALIZADO";
+  const isConcluded = ticket.status === "RESOLVIDO" || ticket.status === "FINALIZADO";
+  const canRate = isConcluded;
+  const isRated = Boolean(ticket.rating && ticket.rating > 0);
+
+  const assigneeName = getUserName(users, ticket.assigneeId);
 
   useEffect(() => {
     setRating(ticket.rating ?? 0);
@@ -254,18 +268,30 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
 
   const submitRating = async () => {
     if (!canRate) {
-      toast.error("A avaliação fica disponível quando a OS estiver finalizada.");
+      toast.error("A avaliação fica disponível quando a OS estiver concluída ou finalizada.");
       return;
     }
 
     const validation = ratingSchema.safeParse({ rating });
     if (!validation.success) {
-      toast.error(validation.error.issues[0]?.message ?? "Selecione uma nota de 1 a 5.");
+      toast.error(validation.error.issues[0]?.message ?? "Selecione uma nota de 1 a 5 estrelas.");
       return;
     }
+
     try {
-      await rateTicket(ticket.id, validation.data.rating, ratingComment);
-      toast.success("Avaliação registrada com sucesso!");
+      let finalComment = ratingComment.trim();
+      if (selectedCompliments.length > 0) {
+        const badgesStr = `[Destaques: ${selectedCompliments.join(", ")}]`;
+        if (finalComment && !finalComment.includes("[Destaques:")) {
+          finalComment = `${badgesStr}\n${finalComment}`;
+        } else if (!finalComment) {
+          finalComment = badgesStr;
+        }
+      }
+
+      await rateTicket(ticket.id, validation.data.rating, finalComment);
+      setIsRatingModalOpen(false);
+      toast.success("🎉 Avaliação registrada com sucesso! Muito obrigado pelo seu feedback.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Não foi possível registrar avaliação.";
@@ -307,6 +333,91 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
         </Link>
         <span className="font-mono text-xs text-muted-foreground">ID: {ticket.id}</span>
       </div>
+
+      {/* Banner de Solução Concluída e Destaque para Avaliação */}
+      {isConcluded && (
+        <div className="rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-card p-6 shadow-lg space-y-4 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="size-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0 border border-emerald-500/30 shadow-xs">
+                <CheckCircle2 className="size-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                  Atendimento Concluído pelo Suporte de T.I.
+                  <span className="text-xs bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    {ticket.status === "FINALIZADO" ? "Finalizado" : "Resolvido"}
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Atendido por <strong className="text-foreground">{assigneeName}</strong>. Confira a solução aplicada abaixo:
+                </p>
+              </div>
+            </div>
+
+            <div>
+              {isRated ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsRatingModalOpen(true)}
+                  className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 gap-2 text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <Star className="size-4 fill-amber-400 text-amber-400" />
+                  Sua Nota: {ticket.rating}★ (Alterar)
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setIsRatingModalOpen(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs shadow-lg hover:shadow-xl transition-all scale-105 hover:scale-110 cursor-pointer animate-pulse-soft"
+                >
+                  <Sparkles className="size-4 text-amber-300" />
+                  ⭐ Avaliar Atendimento (Leva 10s)
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {ticket.solution ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-background/90 backdrop-blur p-4 space-y-1.5 shadow-xs">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                <Sparkles className="size-3.5" /> Solução Técnica Aplicada:
+              </span>
+              <p className="text-sm text-foreground font-medium whitespace-pre-wrap leading-relaxed">
+                {ticket.solution}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-500/20 bg-background/60 p-3 text-xs text-muted-foreground">
+              Atendimento concluído com sucesso pela equipe técnica.
+            </div>
+          )}
+
+          {isRated && (
+            <div className="rounded-2xl border bg-muted/20 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-muted-foreground">Sua Avaliação:</span>
+                <div className="flex items-center text-amber-500 font-bold">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`size-4 ${
+                        i < ticket.rating! ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+                      }`}
+                    />
+                  ))}
+                </div>
+                {ticket.ratingComment && (
+                  <span className="text-foreground italic max-w-md truncate">
+                    "{ticket.ratingComment}"
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hero Card */}
       <Card className="border shadow-[var(--shadow-card)] overflow-hidden bg-card">
@@ -358,18 +469,6 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
               </div>
               <p className="text-sm mt-2 text-foreground font-medium whitespace-pre-wrap leading-relaxed">
                 {ticket.waitingRequesterMessage}
-              </p>
-            </div>
-          )}
-
-          {/* Alerta de Solução Concluída */}
-          {ticket.solution && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
-                <CheckCircle2 className="size-5" /> Resolução / Solução Aplicada:
-              </div>
-              <p className="text-sm mt-2 text-foreground whitespace-pre-wrap leading-relaxed">
-                {ticket.solution}
               </p>
             </div>
           )}
@@ -588,44 +687,117 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
         </CardContent>
       </Card>
 
-      {/* Avaliação */}
-      {canRate && (
-        <Card className="shadow-[var(--shadow-card)] border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" /> Avaliação do Atendimento
-            </CardTitle>
-            <CardDescription>
-              Sua opinião ajuda a equipe de TI a melhorar continuamente o suporte.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((score) => (
-                <button
-                  key={score}
-                  type="button"
-                  onClick={() => setRating(score)}
-                  className={`size-10 rounded-xl font-bold text-sm transition-all ${
-                    rating >= score
-                      ? "bg-primary text-primary-foreground shadow-md scale-105"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {score}★
-                </button>
-              ))}
+      {/* Modal de Avaliação Convincente */}
+      <Dialog open={isRatingModalOpen} onOpenChange={setIsRatingModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="text-center sm:text-left">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Sparkles className="size-5 text-amber-500" /> Avalie o Atendimento de T.I.
+            </DialogTitle>
+            <DialogDescription>
+              Sua opinião é fundamental para aprimorarmos continuamente o suporte aos colaboradores.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Estrelas Interativas */}
+            <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-muted/20 border space-y-2">
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((score) => (
+                  <button
+                    key={score}
+                    type="button"
+                    onMouseEnter={() => setHoverRating(score)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    onClick={() => setRating(score)}
+                    className="p-1 rounded-xl transition-all transform hover:scale-125 focus:outline-none cursor-pointer"
+                  >
+                    <Star
+                      className={`size-9 transition-colors ${
+                        (hoverRating || rating) >= score
+                          ? "fill-amber-400 text-amber-400 drop-shadow-sm"
+                          : "text-muted-foreground/30 hover:text-amber-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs font-bold text-foreground">
+                {(() => {
+                  const currentScore = hoverRating || rating;
+                  if (currentScore === 1) return "1 estrela — Péssimo 😞";
+                  if (currentScore === 2) return "2 estrelas — Ruim 😕";
+                  if (currentScore === 3) return "3 estrelas — Regular 😐";
+                  if (currentScore === 4) return "4 estrelas — Bom 🙂";
+                  if (currentScore === 5) return "5 estrelas — Excelente! 🎉";
+                  return "Clique nas estrelas para avaliar";
+                })()}
+              </span>
             </div>
-            <Textarea
-              placeholder="Comentário sobre o atendimento recebido (opcional)..."
-              value={ratingComment}
-              onChange={(e) => setRatingComment(e.target.value)}
-              rows={2}
-            />
-            <Button onClick={() => void submitRating()}>Salvar Avaliação</Button>
-          </CardContent>
-        </Card>
-      )}
+
+            {/* Chips de Elogio Rápido */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                O que você mais gostou? (Opcional - Clique para selecionar)
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "🚀 Atendimento Rápido",
+                  "👏 Muito Educado",
+                  "💡 Resolveu de Primeira",
+                  "🔧 Excelente Suporte Técnico",
+                  "⚡ Solução Impecável",
+                  "🤝 Ótima Comunicação",
+                ].map((tag) => {
+                  const isSelected = selectedCompliments.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCompliments((prev) =>
+                          isSelected ? prev.filter((t) => t !== tag) : [...prev, tag],
+                        );
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition cursor-pointer ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs scale-102"
+                          : "bg-background hover:bg-muted text-foreground border-border"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Comentário Adicional */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Comentário ou Sugestão (Opcional)</Label>
+              <Textarea
+                rows={3}
+                placeholder="Deixe um elogio, observação ou sugestão para a equipe de TI..."
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRatingModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void submitRating()}
+              disabled={rating === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
+            >
+              <CheckCircle2 className="size-4" /> Enviar Avaliação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -731,9 +903,18 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     setAdminAttachmentFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // Modais de Controle
+  // Modais de Controle e Transição de Status
   const [waitingReasonOpen, setWaitingReasonOpen] = useState(false);
   const [waitingReason, setWaitingReason] = useState("");
+  const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
+  const [resolutionTargetStatus, setResolutionTargetStatus] = useState<"RESOLVIDO" | "FINALIZADO">("FINALIZADO");
+  const [isWaitingPartsOpen, setIsWaitingPartsOpen] = useState(false);
+  const [waitingPartsItem, setWaitingPartsItem] = useState("");
+  const [waitingPartsForecast, setWaitingPartsForecast] = useState("");
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
   const [isExtendSlaOpen, setIsExtendSlaOpen] = useState(false);
   const [slaExtendHours, setSlaExtendHours] = useState<number>(24);
   const [slaExtendReason, setSlaExtendReason] = useState("");
@@ -1108,11 +1289,49 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
 
   const queueStatusChange = (nextStatus: Ticket["status"]) => {
     if (nextStatus === ticket.status) return;
+
+    if (nextStatus === "RESOLVIDO" || nextStatus === "FINALIZADO") {
+      setResolutionTargetStatus(nextStatus);
+      setIsResolutionModalOpen(true);
+      return;
+    }
+
     if (nextStatus === "AGUARDANDO_USUARIO") {
       setWaitingReason(ticket.waitingRequesterMessage ?? "");
       setWaitingReasonOpen(true);
       return;
     }
+
+    if (nextStatus === "AGUARDANDO_PECA") {
+      setWaitingPartsItem("");
+      setWaitingPartsForecast("");
+      setIsWaitingPartsOpen(true);
+      return;
+    }
+
+    if (nextStatus === "CANCELADO") {
+      setCancelReason("");
+      setIsCancelModalOpen(true);
+      return;
+    }
+
+    if (nextStatus === "REABERTO") {
+      setReopenReason("");
+      setIsReopenModalOpen(true);
+      return;
+    }
+
+    if (nextStatus === "EM_ATENDIMENTO") {
+      setConfirmAction({
+        title: "Iniciar Atendimento Técnico",
+        description: `Deseja mover a OS ${ticket.protocol} para "Em Atendimento"? O solicitante poderá acompanhar a evolução do atendimento.`,
+        confirmLabel: "▶️ Iniciar Atendimento",
+        destructive: false,
+        onConfirm: () => actionChangeStatus("EM_ATENDIMENTO", "Atendimento técnico iniciado"),
+      });
+      return;
+    }
+
     queueStatusConfirmation(nextStatus);
   };
 
@@ -1124,6 +1343,115 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     }
     setWaitingReasonOpen(false);
     queueStatusConfirmation("AGUARDANDO_USUARIO", note);
+  };
+
+  const handleConfirmResolution = async () => {
+    const solutionText = technical.solution.trim();
+    if (!solutionText) {
+      toast.error("Por favor, descreva a solução aplicada para concluir a OS.");
+      return;
+    }
+
+    try {
+      await updateTicket(
+        ticket.id,
+        {
+          status: resolutionTargetStatus,
+          solution: solutionText,
+          diagnosis: technical.diagnosis.trim() || undefined,
+          rootCause: technical.rootCause.trim() || undefined,
+          partsUsed: technical.partsUsed.trim() || undefined,
+          timeSpentMinutes: technical.timeSpentMinutes ? Number(technical.timeSpentMinutes) : undefined,
+          resolutionSummary: technical.resolutionSummary.trim() || undefined,
+          internalNotes: technical.internalNotes.trim() || undefined,
+        },
+        {
+          statusAction: resolutionTargetStatus === "FINALIZADO" ? "FINALIZE" : "RESOLVE",
+          statusNote: `✅ Solução: ${solutionText}`,
+        },
+      );
+
+      await addComment(
+        ticket.id,
+        `🎉 Atendimento Concluído:\n• Solução Aplicada: ${solutionText}${technical.partsUsed ? `\n• Peças/Itens: ${technical.partsUsed}` : ""}`,
+        false,
+      );
+
+      setIsResolutionModalOpen(false);
+      toast.success(
+        `Ordem de Serviço ${resolutionTargetStatus === "FINALIZADO" ? "finalizada" : "resolvida"} com sucesso!`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível concluir a OS.";
+      toast.error(message);
+    }
+  };
+
+  const handleConfirmWaitingParts = async () => {
+    const item = waitingPartsItem.trim();
+    if (!item) {
+      toast.error("Informe qual peça ou componente está sendo aguardado.");
+      return;
+    }
+
+    const note = `📦 Aguardando Peça: ${item}${waitingPartsForecast.trim() ? ` (Previsão: ${waitingPartsForecast.trim()})` : ""}`;
+    try {
+      await updateTicket(
+        ticket.id,
+        { status: "AGUARDANDO_PECA" },
+        { statusAction: "UPDATE", statusNote: note },
+      );
+      await addComment(ticket.id, note, false);
+      setIsWaitingPartsOpen(false);
+      toast.success("Status alterado para Aguardando Peça.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível alterar status.";
+      toast.error(message);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    const reason = cancelReason.trim();
+    if (!reason) {
+      toast.error("Informe a justificativa do cancelamento.");
+      return;
+    }
+
+    try {
+      await updateTicket(
+        ticket.id,
+        { status: "CANCELADO" },
+        { statusAction: "CANCEL", statusNote: `❌ Cancelado: ${reason}` },
+      );
+      await addComment(ticket.id, `❌ Chamado Cancelado:\nJustificativa: ${reason}`, false);
+      setIsCancelModalOpen(false);
+      toast.success("Ordem de Serviço cancelada.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível cancelar a OS.";
+      toast.error(message);
+    }
+  };
+
+  const handleConfirmReopen = async () => {
+    const reason = reopenReason.trim();
+    if (!reason) {
+      toast.error("Informe a justificativa da reabertura.");
+      return;
+    }
+
+    try {
+      await updateTicket(
+        ticket.id,
+        { status: "REABERTO" },
+        { statusAction: "REOPEN", statusNote: `🔄 Reaberto: ${reason}` },
+      );
+      await addComment(ticket.id, `🔄 Chamado Reaberto:\nMotivo: ${reason}`, false);
+      setIsReopenModalOpen(false);
+      toast.success("Ordem de Serviço reaberta.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reabrir a OS.";
+      toast.error(message);
+    }
   };
 
   const actionChangePriority = async (priority: Ticket["priority"]) => {
@@ -2246,6 +2574,229 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
               Cancelar
             </Button>
             <Button onClick={confirmWaitingReason}>Salvar e Mover Status</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Obrigatório de Resolução / Finalização */}
+      <Dialog open={isResolutionModalOpen} onOpenChange={setIsResolutionModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+              Conclusão da Ordem de Serviço ({resolutionTargetStatus === "FINALIZADO" ? "Finalizar OS" : "Resolver OS"})
+            </DialogTitle>
+            <DialogDescription>
+              Descreva a solução técnica aplicada. Este texto é obrigatório e ficará visível em destaque para o solicitante.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <Sparkles className="size-3.5" /> Solução Técnica Aplicada * (Visível ao Solicitante)
+              </Label>
+              <Textarea
+                rows={4}
+                required
+                placeholder="Descreva detalhadamente o que foi feito para resolver o problema... Ex: Realizada substituição do cabo de rede defeituoso, configurado IP estático e testado acesso aos sistemas internos com sucesso."
+                value={technical.solution}
+                onChange={(e) => updateTechnicalForm("solution", e.target.value)}
+                className="border-emerald-500/40 focus-visible:ring-emerald-500 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Causa Raiz do Problema</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="Ex: Desgaste natural do conector RJ-45 / Sobretensão na rede elétrica..."
+                  value={technical.rootCause}
+                  onChange={(e) => updateTechnicalForm("rootCause", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Diagnóstico Técnico</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="Ex: Conector quebrado causando perda intermitente de pacotes..."
+                  value={technical.diagnosis}
+                  onChange={(e) => updateTechnicalForm("diagnosis", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Peças Utilizadas</Label>
+                <Input
+                  placeholder="Ex: Cabo Patch Cord 2m"
+                  value={technical.partsUsed}
+                  onChange={(e) => updateTechnicalForm("partsUsed", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Tempo Gasto (minutos)</Label>
+                <Input
+                  type="number"
+                  placeholder="Ex: 30"
+                  value={technical.timeSpentMinutes}
+                  onChange={(e) => updateTechnicalForm("timeSpentMinutes", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Resumo para Relatórios</Label>
+                <Input
+                  placeholder="Ex: Troca de cabo concluída"
+                  value={technical.resolutionSummary}
+                  onChange={(e) => updateTechnicalForm("resolutionSummary", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground">
+                Observações Internas (Privadas da equipe de TI)
+              </Label>
+              <Textarea
+                rows={2}
+                placeholder="Anotações técnicas adicionais sobre o atendimento..."
+                value={technical.internalNotes}
+                onChange={(e) => updateTechnicalForm("internalNotes", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsResolutionModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleConfirmResolution()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2"
+            >
+              <CheckCircle2 className="size-4" /> Confirmar e Concluir OS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Aguardar Peça */}
+      <Dialog open={isWaitingPartsOpen} onOpenChange={setIsWaitingPartsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold">
+              <Package className="size-5 text-amber-500" /> Aguardando Peça ou Componente
+            </DialogTitle>
+            <DialogDescription>
+              Informe qual componente está sendo aguardado para atualizar o histórico da OS e o solicitante.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Peça ou Componente Aguardado *</Label>
+              <Input
+                required
+                placeholder="Ex: Placa mãe LGA 1200, Fonte 500W, Teclado USB..."
+                value={waitingPartsItem}
+                onChange={(e) => setWaitingPartsItem(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Previsão Estimada de Chegada (Opcional)</Label>
+              <Input
+                placeholder="Ex: Amanhã às 14h / 3 dias úteis / Chegada prevista em 25/08"
+                value={waitingPartsForecast}
+                onChange={(e) => setWaitingPartsForecast(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsWaitingPartsOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleConfirmWaitingParts()}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+            >
+              Salvar e Mover para Aguardando Peça
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cancelamento de OS */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold text-destructive">
+              <XCircle className="size-5" /> Cancelar Ordem de Serviço
+            </DialogTitle>
+            <DialogDescription>
+              Informe a justificativa do cancelamento. Esta ação é irreversível e fica registrada na auditoria.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <Label className="text-xs font-bold">Motivo do Cancelamento *</Label>
+            <Textarea
+              rows={3}
+              required
+              placeholder="Ex: Chamado aberto em duplicidade / Cancelado a pedido do solicitante..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCancelModalOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleConfirmCancel()}
+              className="font-bold"
+            >
+              Confirmar Cancelamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Reabertura de OS */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold text-primary">
+              <RefreshCw className="size-5" /> Reabrir Ordem de Serviço
+            </DialogTitle>
+            <DialogDescription>
+              Informe a justificativa da reabertura para registro no histórico da OS.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <Label className="text-xs font-bold">Justificativa da Reabertura *</Label>
+            <Textarea
+              rows={3}
+              required
+              placeholder="Ex: O equipamento voltou a apresentar instabilidade / Solicitante informou novo sintoma..."
+              value={reopenReason}
+              onChange={(e) => setReopenReason(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReopenModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleConfirmReopen()} className="font-bold">
+              Confirmar Reabertura
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
