@@ -45,6 +45,15 @@ export interface Branch {
   active: boolean;
 }
 
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  defaultSlaHours?: number;
+  defaultPriority?: TicketPriority;
+  active?: boolean;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -52,7 +61,14 @@ export interface Category {
   defaultSlaHours: number;
   defaultPriority: TicketPriority;
   active: boolean;
-  subcategories?: Array<{ id: string; name: string }>;
+  subcategories?: Array<{
+    id: string;
+    categoryId?: string;
+    name: string;
+    defaultSlaHours?: number;
+    defaultPriority?: TicketPriority;
+    active?: boolean;
+  }>;
 }
 
 export interface TicketComment {

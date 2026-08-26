@@ -187,9 +187,9 @@ export function CommandPalette() {
                       onClick={() =>
                         runCommand(() =>
                           navigate({
-                            to: "/app/chamados/$id" as any,
+                            to: "/app/chamados/$id",
                             params: { id: ticket.id },
-                          }),
+                          } as any),
                         )
                       }
                       className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg hover:bg-accent hover:text-accent-foreground text-left transition-colors"

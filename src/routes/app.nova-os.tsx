@@ -10,6 +10,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  Info,
   Paperclip,
   Plus,
   Send,
@@ -557,7 +558,7 @@ function NewTicketPage() {
 
                 <div className="space-y-2">
                   <Label className="flex items-center justify-between">
-                    <span>Subcategoria / Serviço *</span>
+                    <span>Subcategoria / Serviço Específico *</span>
                     {form.subcategoryId && (subcategories.find((s) => s.id === form.subcategoryId) as any)?.defaultSlaHours && (
                       <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                         ⏱️ SLA: {(subcategories.find((s) => s.id === form.subcategoryId) as any)?.defaultSlaHours}h úteis
@@ -565,7 +566,7 @@ function NewTicketPage() {
                     )}
                   </Label>
                   <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-primary"
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:ring-2 focus:ring-primary font-medium"
                     value={form.subcategoryId}
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, subcategoryId: event.target.value }))
@@ -574,17 +575,46 @@ function NewTicketPage() {
                   >
                     <option value="">
                       {form.categoryId
-                        ? "Selecione a subcategoria específica..."
+                        ? "Selecione o serviço ou problema específico..."
                         : "Selecione a categoria primeiro"}
                     </option>
                     {subcategories.map((subcategory) => (
                       <option key={subcategory.id} value={subcategory.id}>
-                        {subcategory.name} {(subcategory as any).defaultSlaHours ? `(${(subcategory as any).defaultSlaHours}h)` : ""}
+                        {subcategory.name} {(subcategory as any).defaultSlaHours ? `(${(subcategory as any).defaultSlaHours}h úteis)` : ""}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {selectedCategory && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-1.5 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-semibold text-xs text-primary flex items-center gap-1.5">
+                      <Info className="size-4 shrink-0" />
+                      {selectedCategory.name}
+                    </span>
+                    <span className="text-xs font-mono font-semibold text-primary bg-background px-2 py-0.5 rounded border shadow-2xs">
+                      SLA Padrão: {selectedCategory.defaultSlaHours}h em horário comercial
+                    </span>
+                  </div>
+                  {selectedCategory.description && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {selectedCategory.description}
+                    </p>
+                  )}
+                  {form.subcategoryId && (
+                    <div className="pt-1.5 border-t border-primary/10 flex items-center justify-between text-xs">
+                      <span className="font-medium text-foreground">
+                        Serviço: <strong>{(subcategories.find((s) => s.id === form.subcategoryId) as any)?.name}</strong>
+                      </span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        Prazo estimado: {(subcategories.find((s) => s.id === form.subcategoryId) as any)?.defaultSlaHours ?? selectedCategory.defaultSlaHours}h úteis
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>O que está acontecendo? (Descrição Detalhada) *</Label>

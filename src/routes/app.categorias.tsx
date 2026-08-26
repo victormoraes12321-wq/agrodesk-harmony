@@ -109,18 +109,37 @@ function CategoriesPage() {
             <article key={category.id} className="p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{category.name}</p>
+                  <p className="font-semibold text-base">{category.name}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {category.description || "Sem descricao"}
+                    {category.description || "Sem descrição"}
                   </p>
                 </div>
                 <Badge variant={category.active ? "default" : "outline"}>
                   {category.active ? "Ativa" : "Inativa"}
                 </Badge>
               </div>
+
+              {category.subcategories && category.subcategories.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Subcategorias ({category.subcategories.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {category.subcategories.map((sub) => (
+                      <span
+                        key={sub.id}
+                        className="text-[11px] bg-muted/60 text-foreground px-2 py-0.5 rounded-md border font-medium"
+                      >
+                        {sub.name} {sub.defaultSlaHours ? `(${sub.defaultSlaHours}h)` : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border px-2 py-1">
-                  SLA {category.defaultSlaHours}h
+                  SLA Padrão: {category.defaultSlaHours}h
                 </span>
                 <span className="rounded-full border px-2 py-1">
                   {priorityLabel[category.defaultPriority]}
@@ -146,22 +165,49 @@ function CategoriesPage() {
             <thead className="bg-muted/45 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="text-left px-4 py-3">Categoria</th>
-                <th className="text-left px-4 py-3">Descricao</th>
-                <th className="text-left px-4 py-3">SLA padrao</th>
-                <th className="text-left px-4 py-3">Prioridade padrao</th>
+                <th className="text-left px-4 py-3">Subcategorias & Serviços</th>
+                <th className="text-left px-4 py-3">Descrição</th>
+                <th className="text-left px-4 py-3">SLA Padrão</th>
+                <th className="text-left px-4 py-3">Prioridade</th>
                 <th className="text-left px-4 py-3">Status</th>
-                <th className="text-left px-4 py-3">Acoes</th>
+                <th className="text-left px-4 py-3">Ações</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((category) => (
                 <tr key={category.id} className="border-t">
-                  <td className="px-4 py-3 font-medium">{category.name}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                  <td className="px-4 py-3 font-semibold text-foreground whitespace-nowrap">
+                    {category.name}
+                  </td>
+                  <td className="px-4 py-3 max-w-[340px]">
+                    {category.subcategories && category.subcategories.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {category.subcategories.slice(0, 4).map((sub) => (
+                          <span
+                            key={sub.id}
+                            className="text-[11px] bg-muted/70 text-foreground px-1.5 py-0.5 rounded border"
+                            title={`${sub.name} (SLA: ${sub.defaultSlaHours ?? category.defaultSlaHours}h)`}
+                          >
+                            {sub.name}
+                          </span>
+                        ))}
+                        {category.subcategories.length > 4 && (
+                          <span className="text-[10px] bg-primary/10 text-primary font-semibold px-1.5 py-0.5 rounded">
+                            +{category.subcategories.length - 4} mais
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">
                     {category.description || "-"}
                   </td>
-                  <td className="px-4 py-3 text-sm">{category.defaultSlaHours}h</td>
-                  <td className="px-4 py-3 text-sm">{priorityLabel[category.defaultPriority]}</td>
+                  <td className="px-4 py-3 text-xs font-mono font-semibold">
+                    {category.defaultSlaHours}h úteis
+                  </td>
+                  <td className="px-4 py-3 text-xs">{priorityLabel[category.defaultPriority]}</td>
                   <td className="px-4 py-3">
                     <Badge variant={category.active ? "default" : "outline"}>
                       {category.active ? "Ativa" : "Inativa"}
