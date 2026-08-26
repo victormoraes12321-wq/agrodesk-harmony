@@ -28,8 +28,38 @@ export function getBranchName(branches: Branch[], id?: string): string {
   return formatBranchName(byIdName(branches, id));
 }
 
+export function formatCategoryDisplayName(name: string): string {
+  if (!name || !name.trim()) return "Não informado";
+  const trimmed = name.trim();
+  // Check if string already starts with an emoji
+  const hasEmoji = /^\p{Extended_Pictographic}/u.test(trimmed);
+  if (hasEmoji) return trimmed;
+
+  // Keyword-based fallback
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("computador") || lower.includes("desktop") || lower.includes("pc")) return `🖥️ ${trimmed}`;
+  if (lower.includes("notebook") || lower.includes("laptop")) return `💻 ${trimmed}`;
+  if (lower.includes("impressora") || lower.includes("etiqueta") || lower.includes("termica") || lower.includes("térmica")) return `🖨️ ${trimmed}`;
+  if (lower.includes("balan") || lower.includes("pesagem")) return `⚖️ ${trimmed}`;
+  if (lower.includes("coletor") || lower.includes("leitor")) return `📟 ${trimmed}`;
+  if (lower.includes("internet") || lower.includes("rede") || lower.includes("wi-fi") || lower.includes("wifi")) return `🌐 ${trimmed}`;
+  if (lower.includes("erp") || lower.includes("pdv") || lower.includes("faturamento") || lower.includes("sistema")) return `📊 ${trimmed}`;
+  if (lower.includes("acesso") || lower.includes("senha") || lower.includes("e-mail") || lower.includes("email")) return `🔐 ${trimmed}`;
+  if (lower.includes("software") || lower.includes("aplicativo") || lower.includes("certificado") || lower.includes("programa")) return `📦 ${trimmed}`;
+  if (lower.includes("telefonia") || lower.includes("ramal") || lower.includes("whatsapp")) return `📞 ${trimmed}`;
+  if (lower.includes("camera") || lower.includes("câmera") || lower.includes("cftv") || lower.includes("seguran")) return `📹 ${trimmed}`;
+  if (lower.includes("servidor") || lower.includes("nobreak") || lower.includes("energia")) return `⚡ ${trimmed}`;
+  if (lower.includes("relatorio") || lower.includes("relatório") || lower.includes("bi") || lower.includes("consulta")) return `📋 ${trimmed}`;
+  if (lower.includes("duvida") || lower.includes("dúvida") || lower.includes("orienta") || lower.includes("treinamento")) return `💡 ${trimmed}`;
+  if (lower.includes("equipamento") || lower.includes("troca") || lower.includes("solicita") || lower.includes("compra")) return `🛒 ${trimmed}`;
+
+  return `🏷️ ${trimmed}`;
+}
+
 export function getCategoryName(categories: Category[], id?: string): string {
-  return byIdName(categories, id);
+  const raw = byIdName(categories, id);
+  if (raw === "Nao informado" || raw === "Não informado") return raw;
+  return formatCategoryDisplayName(raw);
 }
 
 export function getUserName(users: User[], id?: string): string {

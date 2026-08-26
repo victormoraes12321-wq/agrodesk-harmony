@@ -34,7 +34,7 @@ import { PageLoading } from "@/components/ui/page-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { maskPhone, priorityLabel, statusLabel } from "@/lib/format";
-import { formatBranchName } from "@/lib/helpdesk";
+import { formatBranchName, formatCategoryDisplayName } from "@/lib/helpdesk";
 import { useApp } from "@/lib/store";
 import { newTicketSchema } from "@/lib/validation";
 import type { Ticket } from "@/types";
@@ -550,7 +550,7 @@ function NewTicketPage() {
                     <option value="">Selecione uma categoria (Obrigatório)...</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
-                        {category.name} — ({category.defaultSlaHours}h úteis)
+                        {formatCategoryDisplayName(category.name)} — ({category.defaultSlaHours}h úteis)
                       </option>
                     ))}
                   </select>
@@ -592,7 +592,7 @@ function NewTicketPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <span className="font-semibold text-xs text-primary flex items-center gap-1.5">
                       <Info className="size-4 shrink-0" />
-                      {selectedCategory.name}
+                      {formatCategoryDisplayName(selectedCategory.name)}
                     </span>
                     <span className="text-xs font-mono font-semibold text-primary bg-background px-2 py-0.5 rounded border shadow-2xs">
                       SLA Padrão: {selectedCategory.defaultSlaHours}h em horário comercial
