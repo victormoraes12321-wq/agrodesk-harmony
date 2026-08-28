@@ -30,6 +30,7 @@ import {
   Phone,
   Plus,
   PlusCircle,
+  Printer,
   RefreshCw,
   RotateCcw,
   Send,
@@ -81,6 +82,7 @@ import { Label } from "@/components/ui/label";
 import { PageLoading } from "@/components/ui/page-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppMessagePanel } from "@/components/tickets/WhatsAppMessagePanel";
+import { TicketPrintDialog } from "@/components/tickets/TicketPrintDialog";
 import { TicketSlaChip } from "@/features/tickets/TicketSlaChip";
 import { TechnicalChecklist } from "@/components/tickets/TechnicalChecklist";
 import { TicketSlaTimeline } from "@/components/tickets/TicketSlaTimeline";
@@ -89,6 +91,7 @@ import { DigitalSignatureModal } from "@/components/tickets/DigitalSignatureModa
 import { soundEffects } from "@/lib/sound";
 import { usePageLoading } from "@/hooks/use-page-loading";
 import { formatDateTime, priorityLabel, statusLabel } from "@/lib/format";
+import { buildQuickDirectWhatsAppUrl } from "@/lib/whatsapp";
 import {
   canViewTicket,
   formatBranchName,
@@ -208,6 +211,7 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
   const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [isReopening, setIsReopening] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const publicComments = ticket.comments.filter((entry) => !entry.internal);
@@ -358,14 +362,25 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12 fade-slide-up">
       {/* Top Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <Link
           to="/app/meus-chamados"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors"
         >
           <ArrowLeft className="size-4" /> Voltar aos meus chamados
         </Link>
-        <span className="font-mono text-xs text-muted-foreground">ID: {ticket.id}</span>
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="h-8 text-xs font-semibold gap-1.5 shadow-xs"
+          >
+            <Printer className="size-3.5" /> Imprimir Comprovante
+          </Button>
+          <span className="font-mono text-xs text-muted-foreground">ID: {ticket.id}</span>
+        </div>
       </div>
 
       {/* Banner de Solução Concluída e Destaque para Avaliação */}
@@ -914,6 +929,17 @@ function RequesterTicketView({ ticket }: { ticket: Ticket }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Impressão da OS */}
+      <TicketPrintDialog
+        open={isPrintModalOpen}
+        onOpenChange={setIsPrintModalOpen}
+        ticket={ticket}
+        departments={departments}
+        branches={branches}
+        categories={categories}
+        assigneeName={assigneeName}
+      />
     </div>
   );
 }
@@ -961,6 +987,7 @@ type ConfirmationAction = {
 // ─────────────────────────────────────────────────────────────────────────────
 function AdminTicketView({ ticket }: { ticket: Ticket }) {
   const {
+    currentUser,
     users,
     departments,
     branches,
@@ -972,6 +999,8 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
     uploadAttachment,
     registerWhatsappPrepared,
   } = useApp();
+
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const admins = users.filter(
     (user) => user.role === "TI_ADMIN" && user.active && user.canReceiveTickets,
@@ -1604,17 +1633,35 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-24 fade-slide-up">
       {/* Top Breadcrumb & Quick Info */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <Link
           to="/app/chamados"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors"
         >
           <ArrowLeft className="size-4" /> Voltar para Gestão de OS
         </Link>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Criado em: {formatDateTime(ticket.createdAt)}</span>
-          <span>•</span>
-          <span className="font-mono">{ticket.id}</span>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {ticket.requesterPhone && (
+            <a
+              href={buildQuickDirectWhatsAppUrl(ticket, { technicianName: currentUser?.name }) || `https://wa.me/55${ticket.requesterPhone.replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+              title="Conversar diretamente com o solicitante no WhatsApp"
+            >
+              <MessageCircle className="size-3.5" /> Chamar no WhatsApp
+            </a>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="h-8 text-xs font-semibold gap-1.5 shadow-xs"
+          >
+            <Printer className="size-3.5" /> Imprimir OS
+          </Button>
+          <span className="text-xs text-muted-foreground font-mono">ID: {ticket.id}</span>
         </div>
       </div>
 
@@ -1784,17 +1831,17 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
             </div>
             <div>
               <span className="text-xs text-muted-foreground block font-semibold">Telefone / Contato</span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="font-medium">{ticket.requesterPhone || "-"}</span>
                 {ticket.requesterPhone && (
                   <a
-                    href={`https://wa.me/55${ticket.requesterPhone.replace(/\D/g, "")}`}
+                    href={buildQuickDirectWhatsAppUrl(ticket, { technicianName: currentUser?.name }) || `https://wa.me/55${ticket.requesterPhone.replace(/\D/g, "")}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-emerald-600 hover:text-emerald-500 inline-flex items-center text-xs font-bold"
-                    title="Abrir WhatsApp"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/30 cursor-pointer"
+                    title="Abrir conversa direta no WhatsApp"
                   >
-                    <MessageCircle className="size-4" />
+                    <MessageCircle className="size-3" /> WhatsApp
                   </a>
                 )}
               </div>
@@ -3012,6 +3059,17 @@ function AdminTicketView({ ticket }: { ticket: Ticket }) {
         ticketProtocol={ticket.protocol}
         requesterName={ticket.requesterName}
         onConfirmSignature={handleConfirmSignature}
+      />
+
+      {/* Modal de Impressão da OS para o Técnico */}
+      <TicketPrintDialog
+        open={isPrintModalOpen}
+        onOpenChange={setIsPrintModalOpen}
+        ticket={ticket}
+        departments={departments}
+        branches={branches}
+        categories={categories}
+        assigneeName={ticket.assigneeId ? getUserName(users, ticket.assigneeId) : "Não atribuído"}
       />
     </div>
   );

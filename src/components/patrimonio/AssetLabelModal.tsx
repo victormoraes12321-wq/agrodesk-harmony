@@ -365,8 +365,9 @@ export function AssetLabelModal({
                 >
                   <div className="flex flex-col justify-between h-full pr-2 overflow-hidden flex-1">
                     <div>
-                      <div className="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-700 tracking-wider">
-                        <span>🌱 AGRODESK TI</span>
+                      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-emerald-800 tracking-wider">
+                        <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo" className="h-3.5 w-auto object-contain" />
+                        <span>CASA DO CAMPO</span>
                       </div>
                       <div className="font-mono font-black text-slate-950 tracking-tight text-base leading-tight mt-0.5">
                         {asset.code}
@@ -408,7 +409,7 @@ export function AssetLabelModal({
                       <div className="size-20 bg-slate-100 animate-pulse rounded" />
                     )}
                     <span className="text-[7.5px] font-semibold text-slate-500 uppercase mt-0.5 tracking-tighter">
-                      ESCANEAR P/ OS
+                      PATRIMÔNIO TI
                     </span>
                   </div>
                 </div>

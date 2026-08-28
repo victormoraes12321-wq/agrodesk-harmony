@@ -35,6 +35,9 @@ backend/uploads/
 backend/tests/load/results/
 prints_b64.json
 test.html
+backups/*.dump
+backups/*.sql
+backups/*.sql.gz
 
 # Wrangler / Cloudflare
 .wrangler/

@@ -276,3 +276,36 @@
     border: 1px solid color-mix(in oklab, var(--color-border) 40%, transparent) !important;
   }
 }
+
+/* ─── Print Engine Optimizations ────────────────────────────────────────────── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #ticket-print-area,
+  #ticket-print-area *,
+  #asset-tag-print-area,
+  #asset-tag-print-area * {
+    visibility: visible;
+  }
+
+  #ticket-print-area,
+  #asset-tag-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  @page {
+    margin: 12mm;
+    size: auto;
+  }
+}

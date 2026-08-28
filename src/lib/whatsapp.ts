@@ -168,8 +168,25 @@ export function generateWhatsAppMessage(
     `ℹ️ *Atualização:*`,
     actionText,
     ``,
-    `— *AgroDesk TI* | Central de Suporte`,
+    `— *AgroDesk TI Harmony* | Suporte Casa do Campo`,
   ];
 
   return sections.join("\n");
+}
+
+export function buildQuickDirectWhatsAppUrl(
+  ticket: Ticket,
+  context: { technicianName?: string; customMessage?: string } = {},
+): string | null {
+  const phone = ticket.requesterPhone;
+  if (!phone) return null;
+
+  const tech = collapseWhitespace(context.technicianName) || "da equipe de T.I.";
+  const title = collapseWhitespace(ticket.title) || "Chamado Técnico";
+  const protocol = ticket.protocol;
+  const requester = collapseWhitespace(ticket.requesterName) || "colaborador(a)";
+
+  const defaultMsg = `Olá, *${requester}*! Aqui é o *${tech}* da TI da Casa do Campo sobre a sua OS *#${protocol}* (${title}). Podemos falar sobre este chamado?`;
+
+  return buildWhatsAppUrl(phone, context.customMessage || defaultMsg);
 }
