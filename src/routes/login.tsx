@@ -1,5 +1,26 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { CheckCircle2, Eye, EyeOff, HelpCircle, Loader2, LogIn, UserPlus, X } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Clock,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  Laptop,
+  Loader2,
+  Lock,
+  LogIn,
+  Radio,
+  Server,
+  ShieldCheck,
+  Sparkles,
+  User,
+  UserPlus,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -8,10 +29,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/lib/store";
 import { loginSchema } from "@/lib/validation";
-import { listPublicDepartmentsApi, listPublicBranchesApi } from "@/services/helpdesk-api";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Login | AgroDesk TI" }] }),
+  head: () => ({ meta: [{ title: "Login | AgroDesk TI Harmony" }] }),
   component: LoginPage,
 });
 
@@ -32,7 +52,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
 
     setLoading(true);
     try {
-      // Tenta fazer login falso para verificar se o usuário existe via endpoint público
       const res = await fetch("/api/v1/auth/forgot-password-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,48 +99,57 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card w-full max-w-md rounded-2xl shadow-2xl border border-border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-card w-full max-w-md rounded-3xl shadow-2xl border border-border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="size-5 text-primary" />
-            <span className="font-semibold text-base">Esqueci minha senha</span>
+        <div className="flex items-center justify-between p-6 border-b bg-muted/20">
+          <div className="flex items-center gap-2.5">
+            <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <HelpCircle className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-foreground">Esqueci minha senha</h3>
+              <p className="text-xs text-muted-foreground">Recuperação e suporte de acesso</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 hover:bg-muted transition-colors"
+            className="rounded-xl p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             aria-label="Fechar"
           >
-            <X className="size-4" />
+            <X className="size-5" />
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="p-6">
           {/* STEP 1: Digitar usuário */}
           {step === "username" && (
             <form onSubmit={(e) => void handleSearch(e)} className="space-y-4">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Digite seu <strong>nome de usuário</strong> abaixo. O sistema irá localizar sua conta
-                e abrir um chamado de TI automaticamente para redefinição de senha.
+                Digite seu <strong>nome de usuário</strong> corporativo. O sistema localizará seu cadastro
+                e abrirá uma Ordem de Serviço prioritária para a equipe de TI.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="forgot-username">Nome de usuário</Label>
-                <Input
-                  id="forgot-username"
-                  type="text"
-                  placeholder="Ex: carolina.silva"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  autoFocus
-                  required
-                />
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="forgot-username"
+                    type="text"
+                    placeholder="Ex: victor.moraes"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    className="pl-10 h-11"
+                    autoFocus
+                    required
+                  />
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full h-11 text-sm font-semibold gap-2 shadow-md" disabled={loading}>
                 {loading ? (
-                  <><Loader2 className="size-4 animate-spin" /> Buscando...</>
+                  <><Loader2 className="size-4 animate-spin" /> Buscando conta...</>
                 ) : (
-                  "Localizar minha conta"
+                  <>Localizar minha conta <ArrowRight className="size-4" /></>
                 )}
               </Button>
             </form>
@@ -130,33 +158,39 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
           {/* STEP 2: Confirmar e criar OS */}
           {step === "confirm" && foundUser && (
             <div className="space-y-4">
-              <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                  ✅ Conta encontrada!
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                  Usuário: <strong>{foundUser.name}</strong> ({foundUser.username})
-                </p>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-start gap-3">
+                <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                    Conta identificada com sucesso!
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                    Colaborador: <strong>{foundUser.name}</strong> ({foundUser.username})
+                  </p>
+                </div>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Confirme para que o sistema abra um chamado automático de
-                <strong> "Redefinição de Senha"</strong> para a equipe de TI. Um técnico
-                entrará em contato com você para concluir o processo.
+                Ao confirmar, o sistema gerará um chamado de <strong>Redefinição de Senha</strong>.
+                Um técnico de TI entrará em contato para resetar seu acesso com segurança.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 h-11"
                   onClick={() => setStep("username")}
                   disabled={loading}
                 >
                   Voltar
                 </Button>
-                <Button className="flex-1" onClick={() => void handleCreateOS()} disabled={loading}>
+                <Button
+                  className="flex-1 h-11 font-semibold gap-1.5 shadow-md"
+                  onClick={() => void handleCreateOS()}
+                  disabled={loading}
+                >
                   {loading ? (
-                    <><Loader2 className="size-4 animate-spin" /> Criando OS...</>
+                    <><Loader2 className="size-4 animate-spin" /> Gerando OS...</>
                   ) : (
-                    "Confirmar e abrir chamado"
+                    <>Confirmar e Abrir OS</>
                   )}
                 </Button>
               </div>
@@ -165,21 +199,20 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
 
           {/* STEP 3: Sucesso */}
           {step === "done" && (
-            <div className="space-y-4 text-center py-2">
+            <div className="space-y-4 text-center py-3">
               <div className="flex justify-center">
-                <div className="size-14 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                  <CheckCircle2 className="size-8 text-green-600" />
+                <div className="size-16 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400 ring-8 ring-emerald-500/5">
+                  <CheckCircle2 className="size-9" />
                 </div>
               </div>
               <div>
-                <p className="font-semibold text-base">Chamado aberto com sucesso!</p>
+                <h4 className="font-bold text-lg text-foreground">Ordem de Serviço Aberta!</h4>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  A equipe de TI recebeu sua solicitação de redefinição de senha e entrará
-                  em contato. Verifique o protocolo no seu portal quando tiver acesso.
+                  A equipe de TI já foi notificada. Seu chamado está na fila prioritária de atendimento.
                 </p>
               </div>
-              <Button className="w-full" onClick={onClose}>
-                Fechar
+              <Button className="w-full h-11 font-semibold" onClick={onClose}>
+                Entendido, fechar
               </Button>
             </div>
           )}
@@ -203,7 +236,7 @@ function LoginPage() {
     event.preventDefault();
     const parsed = loginSchema.safeParse({ username, password });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Dados de login invalidos.");
+      toast.error(parsed.error.issues[0]?.message ?? "Dados de login inválidos.");
       return;
     }
 
@@ -212,7 +245,7 @@ function LoginPage() {
     setSubmitting(false);
     if (!user) return;
 
-    toast.success(`Acesso liberado para ${user.name.split(" ")[0]}.`);
+    toast.success(`Bem-vindo, ${user.name.split(" ")[0]}!`);
     navigate({
       to: user.mustChangePassword
         ? "/app/primeiro-acesso"
@@ -226,132 +259,249 @@ function LoginPage() {
     <>
       {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
 
-      <div className="min-h-screen grid lg:grid-cols-[1.2fr_1fr] bg-background">
-        <section
-          className="hidden lg:flex relative overflow-hidden"
-          style={{ background: "var(--gradient-hero)" }}
-        >
-          <div
-            className="absolute inset-0 opacity-40"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 20% 25%, oklch(0.68 0.16 145 / 0.55), transparent 42%), radial-gradient(circle at 80% 65%, oklch(0.62 0.14 230 / 0.45), transparent 48%)",
-            }}
-          />
-          <div className="relative z-10 p-12 xl:p-16 flex flex-col text-white w-full">
-            <div className="flex items-center gap-3">
-              <div className="size-12 rounded-2xl grid place-items-center bg-white/10 border border-white/20 backdrop-blur p-1.5 overflow-hidden shrink-0">
-                <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
+      <div className="min-h-screen grid lg:grid-cols-[1.25fr_1fr] bg-background">
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* LADO ESQUERDO: BRANDING ENTERPRISE & HERO SHOWCASE                  */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <section className="hidden lg:flex relative overflow-hidden bg-gradient-to-br from-emerald-950 via-[#0a2318] to-slate-950 p-12 xl:p-16 flex-col justify-between text-white select-none">
+          {/* Efeitos de Iluminação e Grade de Fundo */}
+          <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-15" />
+          <div className="absolute -top-32 -left-32 size-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-32 -right-32 size-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Topo: Logo Proeminente e Status do Sistema */}
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-16 px-4 py-2 rounded-2xl bg-white/95 backdrop-blur-md shadow-2xl border border-white/30 flex items-center justify-center shrink-0 ring-4 ring-white/10 transition-transform hover:scale-105">
+                <img
+                  src="/logo.png"
+                  alt="AgroDesk TI Logo"
+                  className="h-12 w-auto object-contain"
+                />
               </div>
               <div>
-                <div className="text-lg font-semibold tracking-tight">AgroDesk TI</div>
-                <div className="text-xs text-white/70">Central de Help Desk e OS</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
+                    AgroDesk TI
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                    Harmony v2.4
+                  </span>
+                </div>
+                <p className="text-xs font-medium text-emerald-200/80 mt-0.5">
+                  Central Integrada de Suporte, Help Desk & Gestão de Ativos
+                </p>
               </div>
             </div>
 
-            <div className="mt-auto max-w-xl space-y-6">
-              <h1 className="text-4xl xl:text-5xl font-semibold leading-tight tracking-tight">
-                Plataforma interna de suporte
-                <br />
-                para operacao do agronegocio.
-              </h1>
-              <p className="text-white/75">
-                Controle chamados por setor e filial, acompanhe SLA e mantenha as unidades operando
-                com previsibilidade.
-              </p>
-              <div className="space-y-3 pt-3">
-                {[
-                  "Atendimento centralizado por protocolo",
-                  "Acompanhamento de SLA e prioridades",
-                  "Rastreabilidade completa das alteracoes",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-sm text-white/85">
-                    <CheckCircle2 className="size-4 text-white/75" /> {item}
-                  </div>
-                ))}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium backdrop-blur-sm">
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              Sistemas Online
+            </div>
+          </div>
+
+          {/* Centro: Título Principal e Proposta de Valor */}
+          <div className="relative z-10 my-auto py-8 max-w-xl space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/10 border border-white/15 text-white/90 text-xs font-semibold backdrop-blur-md">
+              <Sparkles className="size-4 text-emerald-400" />
+              Tecnologia e Alta Disponibilidade no Campo e na Cidade
+            </div>
+
+            <h1 className="text-4xl xl:text-5xl font-extrabold leading-[1.15] tracking-tight text-white">
+              Gestão Inteligente de Suporte e Tecnologia para o{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-green-200">
+                Agronegócio.
+              </span>
+            </h1>
+
+            <p className="text-base text-white/80 leading-relaxed">
+              Controle centralizado de ordens de serviço por setor e filial, monitoramento de SLA em tempo real, gestão completa de inventário e atendimento prioritário para suas unidades.
+            </p>
+
+            {/* Grid de Cards Interativos de Benefícios */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md space-y-1.5 hover:bg-white/10 transition-colors">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                  <Clock className="size-4" /> SLA em Horário Útil
+                </div>
+                <p className="text-xs text-white/70">
+                  Cálculo automático em horário comercial com prazos assertivos por serviço.
+                </p>
               </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md space-y-1.5 hover:bg-white/10 transition-colors">
+                <div className="flex items-center gap-2 text-teal-400 font-bold text-sm">
+                  <Zap className="size-4" /> WebSockets ao Vivo
+                </div>
+                <p className="text-xs text-white/70">
+                  Alertas instantâneos sonoros e visuais na abertura e atualização de chamados.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md space-y-1.5 hover:bg-white/10 transition-colors">
+                <div className="flex items-center gap-2 text-green-400 font-bold text-sm">
+                  <Building2 className="size-4" /> Rede de Filiais & Setores
+                </div>
+                <p className="text-xs text-white/70">
+                  Rastreabilidade e triagem por departamento, unidade física e patrimônio.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md space-y-1.5 hover:bg-white/10 transition-colors">
+                <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm">
+                  <ShieldCheck className="size-4" /> Segurança & Auditoria
+                </div>
+                <p className="text-xs text-white/70">
+                  Histórico completo de alterações com soft-delete e recuperação de dados.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Rodapé do Hero: Badges de Confiança */}
+          <div className="relative z-10 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-white/60">
+            <span>AgroDesk TI Harmony Platform</span>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5 text-emerald-400" /> SLA Monitorado
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5 text-emerald-400" /> Criptografia Ponta a Ponta
+              </span>
             </div>
           </div>
         </section>
 
-        <section className="flex items-center justify-center p-6 sm:p-10 lg:p-12">
-          <div className="w-full max-w-md">
-            <div className="lg:hidden flex items-center gap-3 mb-8">
-              <div className="size-11 rounded-xl grid place-items-center bg-card border shadow-[var(--shadow-card)] p-1 overflow-hidden shrink-0">
-                <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* LADO DIREITO: FORMULÁRIO DE LOGIN                                  */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <section className="flex items-center justify-center p-6 sm:p-10 lg:p-12 relative overflow-hidden">
+          {/* Luz Ambiente Sutil de Fundo */}
+          <div className="absolute top-10 right-10 size-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-10 left-10 size-64 bg-accent/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="w-full max-w-md relative z-10 space-y-8">
+            {/* Header Mobile com Logo */}
+            <div className="lg:hidden flex flex-col items-center text-center space-y-3 mb-4">
+              <div className="h-16 px-4 py-2 rounded-2xl bg-card border shadow-lg flex items-center justify-center">
+                <img src="/logo.png" alt="AgroDesk TI Logo" className="h-12 w-auto object-contain" />
               </div>
               <div>
-                <div className="font-semibold">AgroDesk TI</div>
-                <div className="text-xs text-muted-foreground">Central de suporte</div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">AgroDesk TI</h1>
+                <p className="text-xs text-muted-foreground">Central de Help Desk e Suporte</p>
               </div>
             </div>
 
-            <h2 className="text-3xl font-semibold tracking-tight">Entrar no sistema</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Use seu nome de usuário para acessar o portal de chamados.
-            </p>
-
-            <form onSubmit={(event) => void submit(event)} className="space-y-4 mt-8">
+            {/* Box Principal de Login */}
+            <div className="rounded-3xl border bg-card/80 backdrop-blur-xl p-8 sm:p-10 shadow-2xl border-border/80 space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="username">Nome de usuário</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Seu nome de usuário (ex: Victor)"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  autoComplete="username"
-                  required
-                />
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-semibold">
+                  <Lock className="size-3.5" /> Portal de Acesso Corporativo
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                  Entrar no Sistema
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Informe seu usuário para acessar ordens de serviço e painéis.
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Senha</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:underline"
-                    onClick={() => setShowForgot(true)}
-                  >
-                    Esqueci minha senha
-                  </button>
+              <form onSubmit={(event) => void submit(event)} className="space-y-4">
+                {/* Campo Usuário */}
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Nome de usuário
+                  </Label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder="Ex: victor.moraes"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      autoComplete="username"
+                      className="pl-10 h-12 text-sm rounded-xl focus:ring-2 focus:ring-primary font-medium"
+                      autoFocus
+                      required
+                    />
+                  </div>
                 </div>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="********"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="current-password"
-                    required
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+
+                {/* Campo Senha */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Senha de acesso
+                    </Label>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:text-primary/80 font-semibold transition cursor-pointer"
+                      onClick={() => setShowForgot(true)}
+                    >
+                      Esqueceu sua senha?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••••••"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      autoComplete="current-password"
+                      required
+                      className="pl-10 pr-11 h-12 text-sm rounded-xl focus:ring-2 focus:ring-primary font-medium"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition cursor-pointer"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Botão Entrar */}
+                <Button
+                  type="submit"
+                  className="w-full h-12 rounded-xl text-sm font-bold tracking-wide gap-2 shadow-lg shadow-primary/25 mt-2 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Autenticando...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="size-4" /> Acessar Minha Conta
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              {/* Box de Cadastro */}
+              <div className="pt-4 border-t border-border/70 text-center">
+                <div className="rounded-2xl bg-muted/40 p-3.5 border border-border/50">
+                  <p className="text-xs text-muted-foreground">Primeiro acesso na empresa?</p>
+                  <Link
+                    to="/cadastro"
+                    className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition mt-1"
                   >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
+                    <UserPlus className="size-3.5" /> Criar cadastro para abrir chamados <ArrowRight className="size-3" />
+                  </Link>
                 </div>
               </div>
+            </div>
 
-              <Button type="submit" className="w-full h-11" disabled={submitting}>
-                <LogIn className="size-4" /> {submitting ? "Entrando..." : "Entrar"}
-              </Button>
-            </form>
-
-            <div className="mt-6 pt-6 border-t text-center space-y-2">
-              <p className="text-xs text-muted-foreground">Ainda não possui um usuário?</p>
-              <Link
-                to="/cadastro"
-                className="inline-flex items-center justify-center gap-2 text-sm font-medium text-primary hover:underline transition"
-              >
-                <UserPlus className="size-4" /> Cadastre-se para abrir Ordens de Serviço
-              </Link>
+            {/* Rodapé Discreto */}
+            <div className="text-center text-xs text-muted-foreground space-y-1">
+              <p>AgroDesk TI Harmony • Sistema de Gestão e Suporte</p>
+              <p className="text-[11px] opacity-70">© 2026 Todos os direitos reservados</p>
             </div>
           </div>
         </section>

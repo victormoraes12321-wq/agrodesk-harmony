@@ -120,13 +120,13 @@ function RegistrationPage() {
       />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-xl relative z-10">
-        <div className="flex items-center justify-center gap-3 mb-6 text-center">
-          <div className="size-12 rounded-2xl grid place-items-center bg-card border shadow-md p-1.5 overflow-hidden shrink-0">
-            <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
+        <div className="flex items-center justify-center gap-4 mb-6 text-center">
+          <div className="h-16 px-4 py-2 rounded-2xl bg-card border shadow-lg flex items-center justify-center shrink-0">
+            <img src="/logo.png" alt="AgroDesk TI Logo" className="h-12 w-auto object-contain" />
           </div>
           <div className="text-left">
-            <div className="text-xl font-bold tracking-tight">AgroDesk TI</div>
-            <div className="text-xs text-muted-foreground">Central de Atendimento e OS</div>
+            <div className="text-2xl font-black tracking-tight text-foreground">AgroDesk TI</div>
+            <div className="text-xs text-muted-foreground font-medium">Central Integrada de Suporte & OS</div>
           </div>
         </div>
 
