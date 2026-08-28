@@ -121,8 +121,8 @@ function RegistrationPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-xl relative z-10">
         <div className="flex items-center justify-center gap-4 mb-6 text-center">
-          <div className="h-16 px-4 py-2 rounded-2xl bg-card border shadow-lg flex items-center justify-center shrink-0">
-            <img src="/logo.png" alt="AgroDesk TI Logo" className="h-12 w-auto object-contain" />
+          <div className="h-20 px-6 py-3 rounded-2xl bg-white border shadow-lg flex items-center justify-center shrink-0">
+            <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo Logo" className="h-14 w-auto object-contain" />
           </div>
           <div className="text-left">
             <div className="text-2xl font-black tracking-tight text-foreground">AgroDesk TI</div>

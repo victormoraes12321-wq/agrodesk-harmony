@@ -99,13 +99,13 @@ function FirstAccessPage() {
     <main className="min-h-screen bg-background grid place-items-center px-4 py-8">
       <Card className="w-full max-w-lg shadow-[var(--shadow-card)]">
         <CardHeader className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="size-11 rounded-xl grid place-items-center bg-card border shadow-sm p-1 overflow-hidden shrink-0">
-              <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
+          <div className="flex items-center gap-3.5">
+            <div className="h-14 px-3 py-1.5 rounded-xl bg-white border border-border/80 shadow-xs flex items-center justify-center shrink-0">
+              <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo Logo" className="h-10 w-auto object-contain" />
             </div>
             <div>
-              <p className="font-semibold">AgroDesk TI</p>
-              <p className="text-xs text-muted-foreground">Protecao de primeiro acesso</p>
+              <p className="font-bold text-foreground">AgroDesk TI</p>
+              <p className="text-xs text-muted-foreground">Proteção de primeiro acesso</p>
             </div>
           </div>
           <div>

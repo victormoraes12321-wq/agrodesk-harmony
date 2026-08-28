@@ -108,14 +108,14 @@ export function AppSidebar({
       <Link
         to={admin ? "/app/dashboard" : "/app/portal"}
         onClick={onNavigate}
-        className="px-5 py-5 flex items-center gap-3 border-b border-sidebar-border hover:bg-sidebar-accent/50 transition cursor-pointer"
+        className="px-5 py-4 flex items-center gap-3.5 border-b border-sidebar-border hover:bg-sidebar-accent/50 transition cursor-pointer"
       >
-        <div className="size-11 rounded-xl grid place-items-center bg-white/10 p-1 border border-white/20 shadow-[var(--shadow-glow)] overflow-hidden shrink-0">
-          <img src="/logo.png" alt="AgroDesk TI Logo" className="size-full object-contain" />
+        <div className="h-11 px-2.5 py-1 rounded-xl bg-white border border-border/80 shadow-xs flex items-center justify-center shrink-0">
+          <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo" className="h-8 w-auto object-contain" />
         </div>
         <div>
-          <div className="text-sm font-semibold tracking-tight">AgroDesk TI</div>
-          <div className="text-[11px] text-sidebar-foreground/65">Central de Ticket e OS</div>
+          <div className="text-sm font-bold tracking-tight text-sidebar-foreground">AgroDesk TI</div>
+          <div className="text-[11px] text-sidebar-foreground/70">Central de Ticket e OS</div>
         </div>
       </Link>
 

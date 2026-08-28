@@ -270,31 +270,31 @@ function LoginPage() {
           <div className="absolute -bottom-32 -right-32 size-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
 
           {/* Topo: Logo Proeminente e Status do Sistema */}
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-16 px-4 py-2 rounded-2xl bg-white/95 backdrop-blur-md shadow-2xl border border-white/30 flex items-center justify-center shrink-0 ring-4 ring-white/10 transition-transform hover:scale-105">
+          <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-5">
+              <div className="h-24 sm:h-28 px-6 py-3 rounded-3xl bg-white shadow-2xl border border-white/40 flex items-center justify-center shrink-0 ring-4 ring-white/15 transition-transform hover:scale-105">
                 <img
-                  src="/logo.png"
-                  alt="AgroDesk TI Logo"
-                  className="h-12 w-auto object-contain"
+                  src="/Logo_Casa_do_Campo.png"
+                  alt="Casa do Campo Logo"
+                  className="h-16 sm:h-20 w-auto object-contain drop-shadow-sm"
                 />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-md">
                     AgroDesk TI
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] font-bold uppercase tracking-wider bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full">
                     Harmony v2.4
                   </span>
                 </div>
-                <p className="text-xs font-medium text-emerald-200/80 mt-0.5">
+                <p className="text-xs sm:text-sm font-medium text-emerald-200/90 mt-1">
                   Central Integrada de Suporte, Help Desk & Gestão de Ativos
                 </p>
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium backdrop-blur-sm">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold backdrop-blur-sm shadow-sm">
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
               Sistemas Online
             </div>
@@ -382,18 +382,24 @@ function LoginPage() {
 
           <div className="w-full max-w-md relative z-10 space-y-8">
             {/* Header Mobile com Logo */}
-            <div className="lg:hidden flex flex-col items-center text-center space-y-3 mb-4">
-              <div className="h-16 px-4 py-2 rounded-2xl bg-card border shadow-lg flex items-center justify-center">
-                <img src="/logo.png" alt="AgroDesk TI Logo" className="h-12 w-auto object-contain" />
+            <div className="lg:hidden flex flex-col items-center text-center space-y-3 mb-2">
+              <div className="h-20 px-6 py-3 rounded-2xl bg-white border border-border/80 shadow-xl flex items-center justify-center">
+                <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo" className="h-14 w-auto object-contain" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">AgroDesk TI</h1>
-                <p className="text-xs text-muted-foreground">Central de Help Desk e Suporte</p>
+                <h1 className="text-2xl font-black tracking-tight text-foreground">AgroDesk TI</h1>
+                <p className="text-xs text-muted-foreground">Central Integrada de Suporte e OS</p>
               </div>
             </div>
 
             {/* Box Principal de Login */}
             <div className="rounded-3xl border bg-card/80 backdrop-blur-xl p-8 sm:p-10 shadow-2xl border-border/80 space-y-6">
+              <div className="hidden lg:flex justify-center pb-1">
+                <div className="h-16 px-5 py-2 rounded-2xl bg-white border border-border/70 shadow-sm flex items-center justify-center hover:shadow-md transition-shadow">
+                  <img src="/Logo_Casa_do_Campo.png" alt="Casa do Campo" className="h-11 w-auto object-contain" />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-semibold">
                   <Lock className="size-3.5" /> Portal de Acesso Corporativo
