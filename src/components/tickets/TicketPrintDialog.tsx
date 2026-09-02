@@ -148,7 +148,7 @@ export function TicketPrintDialog({
                 <div>
                   <span className="font-bold text-slate-500 uppercase block">Status / Prioridade:</span>
                   <span className="font-bold text-slate-900">
-                    {statusLabel(ticket.status)} • {priorityLabel(ticket.priority)}
+                    {statusLabel[ticket.status] || ticket.status} • {priorityLabel[ticket.priority] || ticket.priority}
                   </span>
                 </div>
               </div>
@@ -249,7 +249,7 @@ export function TicketPrintDialog({
                 <p><strong>SETOR:</strong> {departmentName}</p>
                 <p><strong>CATEG:</strong> {categoryName}</p>
                 <p><strong>EQUIP:</strong> {ticket.equipment || ticket.assetTag || "-"}</p>
-                <p><strong>STATUS:</strong> {statusLabel(ticket.status)}</p>
+                <p><strong>STATUS:</strong> {statusLabel[ticket.status] || ticket.status}</p>
               </div>
 
               {/* Descrição Térmica */}
